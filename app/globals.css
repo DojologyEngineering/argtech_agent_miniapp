@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+@theme {
+  /* ARG TECH brand — deep field green from the design mockups */
+  --color-brand-50: #eaf5ee;
+  --color-brand-100: #cfe8d8;
+  --color-brand-200: #a3d2b6;
+  --color-brand-300: #6bb68c;
+  --color-brand-400: #2f8f57;
+  --color-brand-500: #0f7038;
+  --color-brand-600: #06642b;
+  --color-brand-700: #045523;
+  --color-brand-800: #03421b;
+  --color-brand-900: #022e13;
+
+  --color-canvas: #f4f6f8;
+  --color-ink: #16211b;
+  --color-muted: #6b7a72;
+  --color-line: #e4e8ea;
+
+  --color-status-pending: #f5a524;
+  --color-status-delivered: #0f7038;
+  --color-status-completed: #2563eb;
+
+  --radius-card: 14px;
+  --font-sans: var(--font-app), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    overscroll-behavior-y: none;
+  }
+
+  /* Telegram Mini Apps render inside a webview: respect the device safe areas. */
+  :root {
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --nav-height: 64px;
+  }
+
+  input,
+  textarea,
+  select {
+    font-size: 16px; /* stops iOS from zooming on focus */
+  }
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Leaflet needs a concrete height and sits under our sticky chrome. */
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  background: #dfe6ea;
+  z-index: 0;
+  font-family: inherit;
+}
+
+.leaflet-control-attribution {
+  font-size: 9px;
+}
