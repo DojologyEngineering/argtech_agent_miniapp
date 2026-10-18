@@ -183,12 +183,11 @@ export default function DashboardPage() {
                         </Badge>
                       </div>
                       <p className="truncate text-xs text-muted">
-                        {order.cropName} · {order.buyer}
+                        {order.cropSummary} · {order.buyer}
                       </p>
                     </div>
                     <span className="shrink-0 text-sm font-semibold text-ink">
-                      {formatNumber(order.quantity)}{" "}
-                      {order.unit === "KG" ? "kg" : order.unit.toLowerCase()}
+                      {formatNumber(order.quantityKg)} kg
                     </span>
                   </Link>
                 ))

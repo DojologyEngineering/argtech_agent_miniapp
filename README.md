@@ -92,8 +92,8 @@ app/
   page.tsx                     Dashboard (Home)
   farmers/                     list · new · [id] · [id]/edit · certificates
   plots/                       list · new · [id] · [id]/edit
-  crops/                       crop cycles: list · new · [id] · [id]/edit
-  calendar/                    read-only month + list views
+  crops/                       crop cycles: list · new · [id] · [id]/edit · harvests · activities
+  calendar/                    read-only month · list · forecast views
   orders/                      list · new · [id] · [id]/edit
   providers.tsx                Telegram context (user, inTelegram, ready)
 
@@ -134,8 +134,8 @@ dataset — it exists only in this phase.
 
 ### Farmer
 List with search; detail with **Primary Phone** / **Secondary Phone** labelled
-consistently, personal info, linked plots, document uploads (profile photo, national ID),
-and certificates; full add/edit forms with cascading Province → District → Commune →
+consistently, personal info, linked plots, crop cycles and purchase orders (each linking
+through), document uploads (profile photo, national ID), and certificates; full add/edit forms with cascading Province → District → Commune →
 Village selects. Farmer cards count **orders**, not "carts".
 
 ### Plots
@@ -147,29 +147,51 @@ as informational — there is no second, independent way to set the area. Saving
 
 ### Crops (Crop Cycles)
 Farmer-linked plantings, not a crop catalog. Each record links Farmer → Plot → Crop, with
-planting / expected harvest / actual harvest dates, itemised costs (seed, fertilizer,
-labor, other), expected and actual output in kg, estimated and actual price **per kg**,
-and read-only **break-even price** and **margin** derived from those. Cultivated area is
-inherited from the plot's calculated hectares — never re-entered. Status (growing / ready
-to harvest / harvested) is derived from the dates.
+planting / expected harvest dates, itemised costs (seed, fertilizer, labor, other), expected
+output in kg and an estimated price **per kg**. Cultivated area is inherited from the plot's
+calculated hectares — never re-entered, and kept in step if the plot is resized or handed to
+another farmer.
 
-The crop list (Jasmine, Basmati, Arborio, Sushi, Brown Rice) exists only as dropdown data
-in `lib/mock/crop-refs.ts` — selecting one pre-fills variety, season, seed source and
-reference price, all still editable. There is deliberately **no Crop Catalog screen**.
-Seasons are **Wet Season** / **Dry Season** only.
+Picking is recorded as a **Harvest Log**: one entry per trip (date, kg, note), because
+vegetables are picked repeatedly over weeks. A harvest carries no price — money exists only on
+order line items. **Field activities** (irrigation, fertilization) are logged from the same
+screen. Status is derived: *Growing* → *Ready to harvest* (expected date reached) →
+*Harvesting* (first pick logged) → *Completed* (the agent taps **Mark cycle complete**;
+**Reopen cycle** undoes it).
+
+**Break-even price** is total cost ÷ a cost basis — expected output while picking is under
+way, the actual harvest once the cycle is complete. **Margin** compares revenue with the cost
+of the kg sold so far (break-even × kg sold), so a cycle isn't shown at a loss just because
+only its first few kg have been sold.
+
+Harvest edits are checked against orders: total harvested can't drop below what is already
+allocated, and a completed cycle takes no new picks until reopened.
+
+The crop list (Cucumber, Tomato, Long Bean, Morning Glory, Chili, Cabbage, Eggplant) exists
+only as dropdown data in `lib/mock/crop-refs.ts` — selecting one pre-fills variety, season,
+seed source and reference price, all still editable. There is deliberately **no Crop Catalog
+screen**. Seasons are **Wet Season** / **Dry Season** only.
 
 ### Calendar
-Read-only, with month-grid and list views. Every entry is derived from a crop cycle, and
-each badge carries its **own** activity type — Planting, Harvesting, Irrigation,
-Fertilization — with a colour legend. Expected (not yet actual) harvests are marked
-"Planned". Tapping an activity opens its crop cycle.
+Read-only, with month-grid, list and supply-forecast views. Entries are derived from crop
+cycles (planting, each logged picking, irrigation, fertilization) and from **orders**
+(a *Delivery* entry on each order's delivery date). Each badge carries its **own** activity
+type with a colour legend; anything still ahead (expected harvests, pending deliveries) is
+marked "Planned". Tapping an entry opens its crop cycle or order.
 
 ### Orders
-An order hangs off a **harvested crop cycle**, which carries farmer, plot, crop and actual
-output — no independent re-selection. Only cycles with an actual harvest and no existing
-order can be picked. Status tiles filter Pending / Delivery / Completed, the detail screen
-shows the Pending → Delivered → Complete flow with the matching action
-(**Mark Delivered** / **Mark Completed**), and saving says **Save Order**.
+Orders are built on the **Supply Matching** screen: pick a crop, optionally set the buyer's
+target quantity, then allocate kg and price against harvested-but-unsold stock from any
+number of farmers. Each allocation is one **line item** on the order; farmer, plot and crop are
+always read through the line's crop cycle. An allocation can't exceed what that cycle has
+picked and not yet sold, and the same rule is enforced in the service layer.
+
+Status moves forward only — Pending → Delivered → Completed — through **Mark Delivered** /
+**Mark Completed**; it is not editable in the form. Each order has an order date and a
+delivery date (shown on the Calendar). Completed orders are locked: no edit, no cancel.
+Produce that went into a delivered or completed order also can't be deleted — the cycle,
+its plot and its farmer are protected — while pending orders just have the allocation
+released. Saving says **Save Order**.
 
 ---
 
@@ -177,6 +199,4 @@ shows the Pending → Delivered → Complete flow with the matching action
 
 - Data lives in `localStorage` on the device; it is not shared between agents.
 - Document uploads record the chosen file name only — no file is stored or transmitted.
-- Field activities (irrigation, fertilization) are seeded on crop cycles and shown
-  read-only in the calendar; there is no entry form for them yet.
 - The notification bell on the dashboard is presentational.

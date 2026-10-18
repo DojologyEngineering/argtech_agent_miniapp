@@ -3,27 +3,26 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { Check, Package, Pencil, X } from "lucide-react";
+import { Check, ChevronRight, Package, Pencil, Sprout, X } from "lucide-react";
 import { ScreenHeader, HeaderIconButton } from "@/components/layout/screen-header";
 import { Content, StickyFooter } from "@/components/layout/app-shell";
 import { Card, CardBody, SectionHeading } from "@/components/ui/card";
-import { Badge, DataPoint, EmptyState, ListSkeleton } from "@/components/ui/misc";
+import { Badge, DataPoint, EmptyState, ErrorNotice, ListSkeleton } from "@/components/ui/misc";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useQuery } from "@/lib/hooks/use-query";
 import { advanceOrderStatus, cancelOrder, getOrder } from "@/lib/api/orders";
-import { ORDER_STATUS_LABEL, orderStatusStep } from "@/lib/derive";
+import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE, orderStatusStep } from "@/lib/derive";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import { haptic } from "@/lib/telegram";
-import { cn } from "@/lib/utils";
-
-const STATUS_TONE = { pending: "amber", delivered: "green", completed: "blue" } as const;
+import { cn, errorMessage } from "@/lib/utils";
 
 export default function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { data: order, error } = useQuery(() => getOrder(id), [id]);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   if (error) {
     return (
@@ -48,7 +47,6 @@ export default function OrderDetailPage() {
   }
 
   const step = orderStatusStep(order.status);
-  const unitLabel = order.unit === "KG" ? "kg" : order.unit.toLowerCase();
 
   return (
     <>
@@ -56,13 +54,16 @@ export default function OrderDetailPage() {
         title="Purchase Details"
         backHref="/orders"
         action={
-          <HeaderIconButton href={`/orders/${order.id}/edit`} label="Edit order">
-            <Pencil className="size-4" />
-          </HeaderIconButton>
+          order.status === "completed" ? undefined : (
+            <HeaderIconButton href={`/orders/${order.id}/edit`} label="Edit order">
+              <Pencil className="size-4" />
+            </HeaderIconButton>
+          )
         }
       />
 
       <Content withFooter className="space-y-5">
+        <ErrorNotice message={actionError} />
         <Card>
           <CardBody className="flex items-center gap-3">
             <span
@@ -80,22 +81,21 @@ export default function OrderDetailPage() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <p className="text-[15px] font-bold text-ink">{order.code}</p>
-                <Badge tone={STATUS_TONE[order.status]} dot>
+                <Badge tone={ORDER_STATUS_TONE[order.status]} dot>
                   {ORDER_STATUS_LABEL[order.status]}
                 </Badge>
               </div>
+              <p className="truncate text-xs text-muted">{order.buyer}</p>
               <p className="truncate text-xs text-muted">
-                {order.cropName} · {order.farmerName}
-              </p>
-              <p className="truncate text-xs text-muted">
-                {order.buyer} · {formatDate(order.createdAt)}
+                {formatDate(order.orderDate)} ·{" "}
+                {order.lineItems.length === 1
+                  ? "1 line item"
+                  : `${order.lineItems.length} line items`}
               </p>
             </div>
             <div className="shrink-0 text-right">
               <p className="text-sm font-bold text-ink">{formatCurrency(order.totalPrice)}</p>
-              <p className="text-[11px] text-muted">
-                {formatNumber(order.quantity)} {unitLabel}
-              </p>
+              <p className="text-[11px] text-muted">{formatNumber(order.totalQuantityKg)} kg</p>
             </div>
           </CardBody>
         </Card>
@@ -116,43 +116,69 @@ export default function OrderDetailPage() {
         </div>
 
         <div>
+          <SectionHeading
+            title={`Line Items (${order.lineItems.length})`}
+            hint={
+              order.farmerNames.length > 1
+                ? `Supplied by ${order.farmerNames.length} farmers`
+                : "Farmer, plot and crop come from each crop cycle"
+            }
+          />
+          <Card>
+            <CardBody className="space-y-2">
+              {order.lineItems.map((item) => (
+                <Link
+                  key={item.id}
+                  href={`/crops/${item.cropCycleId}`}
+                  className="flex items-center gap-3 rounded-xl border border-line/70 p-3 active:bg-canvas"
+                >
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+                    <Sprout className="size-5" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold text-ink">{item.cropName}</p>
+                    <p className="truncate text-xs text-muted">
+                      {item.farmerName} · {item.plotName}
+                    </p>
+                    <p className="truncate text-xs text-muted">
+                      {formatNumber(item.quantityKg)} kg × {formatCurrency(item.pricePerKg, 2)}/kg
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-sm font-bold text-ink">{formatCurrency(item.lineTotal)}</p>
+                  </div>
+                  <ChevronRight className="size-4 shrink-0 text-muted/70" />
+                </Link>
+              ))}
+
+              <div className="flex items-center justify-between border-t border-line pt-2.5">
+                <span className="text-sm font-bold text-ink">
+                  Total · {formatNumber(order.totalQuantityKg)} kg
+                </span>
+                <span className="text-sm font-bold text-ink">
+                  {formatCurrency(order.totalPrice)}
+                </span>
+              </div>
+            </CardBody>
+          </Card>
+        </div>
+
+        <div>
           <SectionHeading title="Order Details" />
           <Card>
             <CardBody className="grid grid-cols-2 gap-4">
-              <DataPoint
-                label="Crop cycle"
-                value={
-                  order.cycle ? (
-                    <Link href={`/crops/${order.cycle.id}`} className="text-brand-700 underline">
-                      {order.cropName}
-                    </Link>
-                  ) : (
-                    "—"
-                  )
-                }
-              />
-              <DataPoint
-                label="Farmer"
-                value={
-                  order.cycle ? (
-                    <Link href={`/farmers/${order.cycle.farmerId}`} className="text-brand-700 underline">
-                      {order.farmerName}
-                    </Link>
-                  ) : (
-                    order.farmerName
-                  )
-                }
-              />
-              <DataPoint label="Plot name" value={order.plotName} />
-              <DataPoint label="Variety type" value={order.cycle?.varietyType ?? "—"} />
-              <DataPoint label="Quantity" value={formatNumber(order.quantity)} />
-              <DataPoint label="Unit" value={order.unit} />
-              <DataPoint label="Total Price" value={formatCurrency(order.totalPrice)} />
               <DataPoint label="Buyer" value={order.buyer} />
-              <DataPoint label="Create Date" value={formatDate(order.createdAt)} />
+              <DataPoint label="Order Date" value={formatDate(order.orderDate)} />
+              <DataPoint label="Delivery Date" value={formatDate(order.deliveryDate)} />
               <DataPoint
                 label="Delivery Method"
                 value={order.deliveryMethod === "pickup" ? "Pick up" : "Delivery"}
+              />
+              <DataPoint label="Total Quantity" value={`${formatNumber(order.totalQuantityKg)} kg`} />
+              <DataPoint
+                label="Total Price"
+                value={formatCurrency(order.totalPrice)}
+                className="col-span-2"
               />
             </CardBody>
           </Card>
@@ -190,7 +216,12 @@ export default function OrderDetailPage() {
               variant={order.status === "pending" ? "warning" : "primary"}
               onClick={async () => {
                 haptic("medium");
-                await advanceOrderStatus(order.id);
+                setActionError(null);
+                try {
+                  await advanceOrderStatus(order.id);
+                } catch (e) {
+                  setActionError(errorMessage(e));
+                }
               }}
             >
               <Check /> {order.status === "pending" ? "Mark Delivered" : "Mark Completed"}
@@ -203,13 +234,17 @@ export default function OrderDetailPage() {
         open={confirmCancel}
         onOpenChange={setConfirmCancel}
         title={`Cancel ${order.code}?`}
-        description="The order will be removed. The crop cycle itself is not affected."
+        description="The order and all its line items will be removed, releasing the allocated quantities back to each crop cycle."
         confirmLabel="Cancel order"
         cancelLabel="Keep order"
         destructive
         onConfirm={async () => {
-          await cancelOrder(order.id);
-          router.replace("/orders");
+          try {
+            await cancelOrder(order.id);
+            router.replace("/orders");
+          } catch (e) {
+            setActionError(errorMessage(e));
+          }
         }}
       />
     </>

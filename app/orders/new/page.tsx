@@ -5,16 +5,17 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ScreenHeader } from "@/components/layout/screen-header";
 import { Content } from "@/components/layout/app-shell";
 import { ListSkeleton } from "@/components/ui/misc";
-import { OrderForm } from "@/components/orders/order-form";
+import { SupplyMatching } from "@/components/orders/supply-matching";
 import { createOrder } from "@/lib/api/orders";
 
-function NewOrderForm() {
+function NewOrderFlow() {
   const router = useRouter();
-  const cropCycleId = useSearchParams().get("cropCycleId") ?? undefined;
+  // Optional: pre-filters the crop when arriving from a cycle's "Sell surplus".
+  const cropRefId = useSearchParams().get("cropRefId") ?? undefined;
 
   return (
-    <OrderForm
-      defaultCropCycleId={cropCycleId}
+    <SupplyMatching
+      initial={{ cropRefId }}
       cancelHref="/orders"
       onSubmit={async (input) => {
         const order = await createOrder(input);
@@ -28,13 +29,13 @@ export default function NewOrderPage() {
   return (
     <>
       <ScreenHeader
-        title="Create Order"
-        subtitle="Raise a purchase order for a harvested crop"
+        title="Supply Matching"
+        subtitle="Match a buyer's need to available stock"
         backHref="/orders"
       />
       <Content withFooter>
         <Suspense fallback={<ListSkeleton rows={4} />}>
-          <NewOrderForm />
+          <NewOrderFlow />
         </Suspense>
       </Content>
     </>

@@ -31,9 +31,9 @@ export interface UpcomingHarvest {
 export interface RecentOrderRow {
   id: ID;
   code: string;
-  cropName: string;
-  quantity: number;
-  unit: string;
+  /** An order can span several crops; this is a compact summary label. */
+  cropSummary: string;
+  quantityKg: number;
   buyer: string;
   status: OrderStatus;
 }
@@ -50,7 +50,7 @@ export async function getDashboard(): Promise<DashboardData> {
   const db = getState();
   const today = toISODate(new Date());
 
-  const activeCrops = db.cropCycles.filter((c) => cropCycleStatus(c, today) !== "harvested").length;
+  const activeCrops = db.cropCycles.filter((c) => cropCycleStatus(c, today) !== "completed").length;
 
   // Actual harvested volume, bucketed into the last six months.
   const buckets: HarvestPoint[] = [];
@@ -64,10 +64,11 @@ export async function getDashboard(): Promise<DashboardData> {
   );
 
   db.cropCycles.forEach((cycle) => {
-    if (!cycle.actualHarvestDate || !cycle.actualOutputKg) return;
-    const key = format(parseISO(cycle.actualHarvestDate), "yyyy-MM");
-    const index = bucketKeys.indexOf(key);
-    if (index >= 0) buckets[index].tons += cycle.actualOutputKg / 1000;
+    cycle.harvestLog.forEach((entry) => {
+      const key = format(parseISO(entry.date), "yyyy-MM");
+      const index = bucketKeys.indexOf(key);
+      if (index >= 0) buckets[index].tons += entry.quantityKg / 1000;
+    });
   });
   buckets.forEach((b) => {
     b.tons = Number(b.tons.toFixed(2));
@@ -78,7 +79,7 @@ export async function getDashboard(): Promise<DashboardData> {
   const harvestChangePercent = previous > 0 ? ((last - previous) / previous) * 100 : null;
 
   const upcomingHarvests: UpcomingHarvest[] = db.cropCycles
-    .filter((c) => !c.actualHarvestDate && c.expectedHarvestDate)
+    .filter((c) => c.harvestLog.length === 0 && c.expectedHarvestDate)
     .map((cycle) => {
       const farmer = db.farmers.find((f) => f.id === cycle.farmerId);
       const plot = db.plots.find((p) => p.id === cycle.plotId);
@@ -97,17 +98,25 @@ export async function getDashboard(): Promise<DashboardData> {
     .slice(0, 4);
 
   const recentOrders: RecentOrderRow[] = [...db.orders]
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .sort((a, b) => b.orderDate.localeCompare(a.orderDate))
     .slice(0, 4)
-    .map((order) => ({
-      id: order.id,
-      code: order.code,
-      cropName: db.cropCycles.find((c) => c.id === order.cropCycleId)?.cropName ?? "—",
-      quantity: order.quantity,
-      unit: order.unit,
-      buyer: order.buyer,
-      status: order.status,
-    }));
+    .map((order) => {
+      const crops = Array.from(
+        new Set(
+          order.lineItems.map(
+            (item) => db.cropCycles.find((c) => c.id === item.cropCycleId)?.cropName ?? "—",
+          ),
+        ),
+      );
+      return {
+        id: order.id,
+        code: order.code,
+        cropSummary: crops.length > 1 ? `${crops[0]} +${crops.length - 1}` : (crops[0] ?? "—"),
+        quantityKg: order.lineItems.reduce((sum, i) => sum + i.quantityKg, 0),
+        buyer: order.buyer,
+        status: order.status,
+      };
+    });
 
   return delay({
     stats: {

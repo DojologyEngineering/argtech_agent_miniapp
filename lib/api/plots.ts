@@ -2,6 +2,7 @@ import { delay, getState, mutate, NotFoundError } from "../db";
 import { hectaresFromBoundary } from "../geo";
 import { uid } from "../utils";
 import { farmerFullName } from "./farmers";
+import { assertNoSettledSales } from "./guards";
 import type { ID, Plot, PlotInput, PlotSummary } from "../types";
 
 function toSummary(plot: Plot): PlotSummary {
@@ -54,9 +55,12 @@ export async function updatePlot(id: ID, input: PlotInput): Promise<Plot> {
       areaHectares: hectaresFromBoundary(input.boundary),
     };
     db.plots[index] = next;
-    // Crop cycles snapshot the plot area, so keep them in step when it changes.
+    // Crop cycles snapshot the plot area and carry the plot's owner, so keep
+    // both in step when the plot is resized or handed to another farmer.
     db.cropCycles.forEach((cycle) => {
-      if (cycle.plotId === id) cycle.cultivatedAreaHectares = next.areaHectares;
+      if (cycle.plotId !== id) return;
+      cycle.cultivatedAreaHectares = next.areaHectares;
+      cycle.farmerId = next.farmerId;
     });
     return next;
   });
@@ -64,9 +68,17 @@ export async function updatePlot(id: ID, input: PlotInput): Promise<Plot> {
 }
 
 export async function deletePlot(id: ID): Promise<void> {
+  const cycleIdsOnPlot = getState()
+    .cropCycles.filter((c) => c.plotId === id)
+    .map((c) => c.id);
+  assertNoSettledSales(cycleIdsOnPlot, "this plot");
   mutate((db) => {
     const cycleIds = db.cropCycles.filter((c) => c.plotId === id).map((c) => c.id);
-    db.orders = db.orders.filter((o) => !cycleIds.includes(o.cropCycleId));
+    // Strip this plot's allocations from pending orders, then drop orders left with nothing.
+    db.orders.forEach((order) => {
+      order.lineItems = order.lineItems.filter((i) => !cycleIds.includes(i.cropCycleId));
+    });
+    db.orders = db.orders.filter((o) => o.lineItems.length > 0);
     db.cropCycles = db.cropCycles.filter((c) => c.plotId !== id);
     db.plots = db.plots.filter((p) => p.id !== id);
   });

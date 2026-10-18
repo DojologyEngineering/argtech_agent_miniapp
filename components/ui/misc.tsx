@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Search, X } from "lucide-react";
+import { CircleAlert, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { initials } from "@/lib/format";
 
@@ -138,6 +138,28 @@ export function EmptyState({
       <p className="text-sm font-semibold text-ink">{title}</p>
       {description ? <p className="mt-1 max-w-xs text-xs text-muted">{description}</p> : null}
       {action ? <div className="mt-4">{action}</div> : null}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------- ErrorNotice */
+
+/** Inline explanation for a rejected action; renders nothing without a message. */
+export function ErrorNotice({
+  message,
+  className,
+}: {
+  message: string | null | undefined;
+  className?: string;
+}) {
+  if (!message) return null;
+  return (
+    <div
+      role="alert"
+      className={cn("flex items-start gap-2 rounded-xl bg-red-50 p-3 text-xs text-red-600", className)}
+    >
+      <CircleAlert className="mt-0.5 size-4 shrink-0" />
+      <p>{message}</p>
     </div>
   );
 }

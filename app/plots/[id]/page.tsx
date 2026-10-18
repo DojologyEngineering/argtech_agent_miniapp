@@ -7,15 +7,16 @@ import { ChevronRight, Pencil, Sprout, Trash2, X } from "lucide-react";
 import { ScreenHeader, HeaderIconButton } from "@/components/layout/screen-header";
 import { Content } from "@/components/layout/app-shell";
 import { Card, CardBody, SectionHeading } from "@/components/ui/card";
-import { Badge, DataPoint, EmptyState, ListSkeleton } from "@/components/ui/misc";
+import { Badge, DataPoint, EmptyState, ErrorNotice, ListSkeleton } from "@/components/ui/misc";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { PlotAreaField } from "@/components/plots/plot-area-field";
 import { useQuery } from "@/lib/hooks/use-query";
 import { deletePlot, getPlot } from "@/lib/api/plots";
 import { listCropCycles } from "@/lib/api/crop-cycles";
-import { CROP_STATUS_LABEL } from "@/lib/derive";
+import { CROP_STATUS_LABEL, CROP_STATUS_TONE } from "@/lib/derive";
 import { formatDate } from "@/lib/format";
+import { errorMessage } from "@/lib/utils";
 
 export default function PlotDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -23,6 +24,7 @@ export default function PlotDetailPage() {
   const { data: plot, error } = useQuery(() => getPlot(id), [id]);
   const { data: cycles } = useQuery(() => listCropCycles({ plotId: id }), [id]);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   if (error) {
     return (
@@ -61,6 +63,8 @@ export default function PlotDetailPage() {
       />
 
       <Content className="space-y-5">
+        <ErrorNotice message={actionError} />
+
         <div>
           <SectionHeading title="Plot Details" />
           <Card>
@@ -116,7 +120,7 @@ export default function PlotDetailPage() {
                         Planted {formatDate(cycle.plantingDate)}
                       </p>
                     </div>
-                    <Badge tone={cycle.status === "harvested" ? "blue" : "green"}>
+                    <Badge tone={CROP_STATUS_TONE[cycle.status]}>
                       {CROP_STATUS_LABEL[cycle.status]}
                     </Badge>
                     <ChevronRight className="size-4 shrink-0 text-muted/70" />
@@ -140,12 +144,18 @@ export default function PlotDetailPage() {
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
         title={`Delete ${plot.name}?`}
-        description="Crop cycles and purchase orders recorded on this plot will be removed too."
+        description="Its crop cycles are removed and their produce is released from any pending order. A plot that already supplied a delivered or completed order can't be deleted."
         confirmLabel="Delete"
         destructive
         onConfirm={async () => {
-          await deletePlot(plot.id);
-          router.replace("/plots");
+          setActionError(null);
+          try {
+            await deletePlot(plot.id);
+            router.replace("/plots");
+          } catch (e) {
+            setActionError(errorMessage(e));
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }
         }}
       />
     </>

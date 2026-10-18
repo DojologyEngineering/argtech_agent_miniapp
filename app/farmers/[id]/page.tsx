@@ -12,6 +12,8 @@ import {
   Pencil,
   Phone,
   Plus,
+  ShoppingCart,
+  Sprout,
   Trash2,
   Upload,
   X,
@@ -19,7 +21,7 @@ import {
 import { ScreenHeader, HeaderIconButton } from "@/components/layout/screen-header";
 import { Content } from "@/components/layout/app-shell";
 import { Card, CardBody, SectionHeading } from "@/components/ui/card";
-import { Badge, DataPoint, EmptyState, ListSkeleton } from "@/components/ui/misc";
+import { Badge, DataPoint, EmptyState, ErrorNotice, ListSkeleton } from "@/components/ui/misc";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useQuery } from "@/lib/hooks/use-query";
@@ -31,7 +33,16 @@ import {
   setFarmerDocument,
 } from "@/lib/api/farmers";
 import { listPlots } from "@/lib/api/plots";
-import { formatDate, formatHectares } from "@/lib/format";
+import { listCropCycles } from "@/lib/api/crop-cycles";
+import { listOrdersForFarmer } from "@/lib/api/orders";
+import {
+  CROP_STATUS_LABEL,
+  CROP_STATUS_TONE,
+  ORDER_STATUS_LABEL,
+  ORDER_STATUS_TONE,
+} from "@/lib/derive";
+import { formatCurrency, formatDate, formatHectares, formatKg } from "@/lib/format";
+import { errorMessage } from "@/lib/utils";
 
 const GENDER_LABEL: Record<string, string> = { male: "Male", female: "Female", other: "Other" };
 
@@ -41,10 +52,13 @@ export default function FarmerDetailPage() {
 
   const { data: farmer, loading, error } = useQuery(() => getFarmer(id), [id]);
   const { data: plots } = useQuery(() => listPlots("", id), [id]);
+  const { data: cycles } = useQuery(() => listCropCycles({ farmerId: id }), [id]);
+  const { data: orders } = useQuery(() => listOrdersForFarmer(id), [id]);
   const { data: certificates } = useQuery(() => listCertificates(id), [id]);
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [certToDelete, setCertToDelete] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   if (error) {
     return (
@@ -83,6 +97,8 @@ export default function FarmerDetailPage() {
       />
 
       <Content className="space-y-5">
+        <ErrorNotice message={actionError} />
+
         <div>
           <SectionHeading title="Contact Information" />
           <Card>
@@ -152,6 +168,96 @@ export default function FarmerDetailPage() {
                 ))
               ) : (
                 <p className="py-4 text-center text-sm text-muted">No plots recorded yet</p>
+              )}
+            </CardBody>
+          </Card>
+        </div>
+
+        <div>
+          <SectionHeading
+            title={`Crop Cycles (${cycles?.length ?? 0})`}
+            hint="Everything this farmer has planted"
+            action={
+              <Button asChild variant="subtle" size="sm">
+                <Link href={`/crops/new?farmerId=${farmer.id}`}>
+                  <Plus /> Add
+                </Link>
+              </Button>
+            }
+          />
+          <Card>
+            <CardBody className="space-y-2">
+              {cycles?.length ? (
+                cycles.map((cycle) => (
+                  <Link
+                    key={cycle.id}
+                    href={`/crops/${cycle.id}`}
+                    className="flex items-center gap-3 rounded-xl border border-line/70 p-3 active:bg-canvas"
+                  >
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+                      <Sprout className="size-5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-bold text-ink">{cycle.cropName}</p>
+                      <p className="truncate text-xs text-muted">
+                        {cycle.plotName} · Planted {formatDate(cycle.plantingDate)}
+                      </p>
+                    </div>
+                    <Badge tone={CROP_STATUS_TONE[cycle.status]}>
+                      {CROP_STATUS_LABEL[cycle.status]}
+                    </Badge>
+                    <ChevronRight className="size-4 shrink-0 text-muted/70" />
+                  </Link>
+                ))
+              ) : (
+                <p className="py-4 text-center text-sm text-muted">No crop cycles recorded yet</p>
+              )}
+            </CardBody>
+          </Card>
+        </div>
+
+        <div>
+          <SectionHeading
+            title={`Purchase Orders (${orders?.length ?? 0})`}
+            hint="Orders that include this farmer's produce"
+          />
+          <Card>
+            <CardBody className="space-y-2">
+              {orders?.length ? (
+                orders.map((order) => {
+                  // Only this farmer's share of a possibly multi-farmer order.
+                  const own = order.lineItems.filter((i) => i.farmerId === farmer.id);
+                  const ownKg = own.reduce((sum, i) => sum + i.quantityKg, 0);
+                  const ownValue = own.reduce((sum, i) => sum + i.lineTotal, 0);
+                  return (
+                    <Link
+                      key={order.id}
+                      href={`/orders/${order.id}`}
+                      className="flex items-center gap-3 rounded-xl border border-line/70 p-3 active:bg-canvas"
+                    >
+                      <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+                        <ShoppingCart className="size-5" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="truncate text-sm font-bold text-ink">{order.code}</p>
+                          <Badge tone={ORDER_STATUS_TONE[order.status]} dot>
+                            {ORDER_STATUS_LABEL[order.status]}
+                          </Badge>
+                        </div>
+                        <p className="truncate text-xs text-muted">{order.buyer}</p>
+                        <p className="truncate text-xs text-muted">
+                          {formatKg(ownKg)} from this farmer · {formatCurrency(ownValue)}
+                        </p>
+                      </div>
+                      <ChevronRight className="size-4 shrink-0 text-muted/70" />
+                    </Link>
+                  );
+                })
+              ) : (
+                <p className="py-4 text-center text-sm text-muted">
+                  No orders include this farmer's produce yet
+                </p>
               )}
             </CardBody>
           </Card>
@@ -252,12 +358,18 @@ export default function FarmerDetailPage() {
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
         title={`Delete ${farmer.fullName}?`}
-        description="Their plots, crop cycles and purchase orders will be removed too. This cannot be undone."
+        description="Their plots and crop cycles are removed, and their produce is released from any pending order. A farmer whose produce is in a delivered or completed order can't be deleted. This cannot be undone."
         confirmLabel="Delete"
         destructive
         onConfirm={async () => {
-          await deleteFarmer(farmer.id);
-          router.replace("/farmers");
+          setActionError(null);
+          try {
+            await deleteFarmer(farmer.id);
+            router.replace("/farmers");
+          } catch (e) {
+            setActionError(errorMessage(e));
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }
         }}
       />
 

@@ -92,40 +92,52 @@ export default function OrdersPage() {
 
         {orders?.map((order) => (
           <Link key={order.id} href={`/orders/${order.id}`} className="block">
-            <Card className="flex items-center gap-3 p-3.5 active:bg-canvas">
-              <span
-                className={cn(
-                  "flex size-11 shrink-0 items-center justify-center rounded-xl",
-                  order.status === "pending"
-                    ? "bg-amber-50 text-amber-600"
-                    : order.status === "delivered"
-                      ? "bg-brand-50 text-brand-600"
-                      : "bg-blue-50 text-blue-600",
-                )}
-              >
-                <Package className="size-5" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="text-[15px] font-bold text-ink">{order.code}</p>
-                  <Badge tone={STATUS_TONE[order.status]} dot>
-                    {ORDER_STATUS_LABEL[order.status]}
-                  </Badge>
+            <Card className="p-3.5 active:bg-canvas">
+              <div className="flex items-center gap-3">
+                <span
+                  className={cn(
+                    "flex size-11 shrink-0 items-center justify-center rounded-xl",
+                    order.status === "pending"
+                      ? "bg-amber-50 text-amber-600"
+                      : order.status === "delivered"
+                        ? "bg-brand-50 text-brand-600"
+                        : "bg-blue-50 text-blue-600",
+                  )}
+                >
+                  <Package className="size-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-[15px] font-bold text-ink">{order.code}</p>
+                    <Badge tone={STATUS_TONE[order.status]} dot>
+                      {ORDER_STATUS_LABEL[order.status]}
+                    </Badge>
+                  </div>
+                  <p className="truncate text-xs text-muted">
+                    {order.buyer} · {formatDate(order.orderDate)}
+                  </p>
                 </div>
-                <p className="truncate text-xs text-muted">
-                  {order.cropName} · {order.farmerName}
-                </p>
-                <p className="truncate text-xs text-muted">
-                  {order.buyer} · {formatDate(order.createdAt)}
-                </p>
+                <div className="shrink-0 text-right">
+                  <p className="text-sm font-bold text-ink">{formatCurrency(order.totalPrice)}</p>
+                  <p className="text-[11px] text-muted">{formatNumber(order.totalQuantityKg)} kg</p>
+                </div>
+                <ChevronRight className="size-5 shrink-0 text-muted/70" />
               </div>
-              <div className="shrink-0 text-right">
-                <p className="text-sm font-bold text-ink">{formatCurrency(order.totalPrice)}</p>
-                <p className="text-[11px] text-muted">
-                  {formatNumber(order.quantity)} {order.unit === "KG" ? "kg" : order.unit.toLowerCase()}
-                </p>
+
+              {/* One row per line item — an order can span several farmers. */}
+              <div className="mt-3 space-y-1.5 border-t border-line/70 pt-2.5">
+                {order.lineItems.map((item) => (
+                  <div key={item.id} className="flex items-center gap-2 text-xs">
+                    <span className="min-w-0 flex-1 truncate text-muted">
+                      <span className="font-medium text-ink">{item.cropName}</span> ·{" "}
+                      {item.farmerName} · {item.plotName}
+                    </span>
+                    <span className="shrink-0 text-muted">
+                      {formatNumber(item.quantityKg)} kg × {formatCurrency(item.pricePerKg, 2)}
+                    </span>
+                  </div>
+                ))}
               </div>
-              <ChevronRight className="size-5 shrink-0 text-muted/70" />
             </Card>
           </Link>
         ))}

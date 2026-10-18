@@ -114,7 +114,7 @@ export interface CropRef {
 
 /* -------------------------------------------------------------- Crop cycle */
 
-export type CropCycleStatus = "growing" | "ready_to_harvest" | "harvested";
+export type CropCycleStatus = "growing" | "ready_to_harvest" | "harvesting" | "completed";
 
 export const PRODUCTION_METHODS = ["Conventional", "Organic", "GAP", "Mixed"] as const;
 export const DELIVERY_FREQUENCIES = ["One-off", "Weekly", "Bi-weekly", "Monthly"] as const;
@@ -135,7 +135,7 @@ export interface ProductionDetails {
   notes: string;
 }
 
-export type ActivityType = "planting" | "harvesting" | "irrigation" | "fertilization";
+export type ActivityType = "planting" | "harvesting" | "irrigation" | "fertilization" | "delivery";
 
 /** Field events logged against a cycle. The Calendar renders these read-only. */
 export interface CropActivity {
@@ -144,6 +144,25 @@ export interface CropActivity {
   date: string;
   note: string;
 }
+
+/**
+ * One picking trip — a physical event only. Vegetables like tomato, cucumber,
+ * chili, eggplant and long bean are picked repeatedly over weeks; a
+ * single-harvest crop like cabbage just ends up with one entry.
+ *
+ * Deliberately carries no price and no buyer: harvesting is not selling.
+ * Money is recorded on Order line items instead.
+ */
+export interface HarvestLogEntry {
+  id: ID;
+  date: string;
+  quantityKg: number;
+  note: string;
+}
+
+/** Manually loggable field work. Planting/harvesting/delivery derive from other records. */
+export const MANUAL_ACTIVITY_TYPES = ["irrigation", "fertilization"] as const;
+export type ManualActivityType = (typeof MANUAL_ACTIVITY_TYPES)[number];
 
 export interface CropCycle {
   id: ID;
@@ -159,48 +178,66 @@ export interface CropCycle {
 
   plantingDate: string;
   expectedHarvestDate: string;
-  actualHarvestDate: string | null;
 
   /** Copied from the linked plot's calculated area — not re-entered here. */
   cultivatedAreaHectares: number;
 
   costs: CropCosts;
   expectedOutputKg: number;
-  actualOutputKg: number | null;
   estimatedPricePerKg: number;
-  actualPricePerKg: number | null;
+
+  /** Every picking logged so far. Total output/average price are derived — see lib/derive.ts. */
+  harvestLog: HarvestLogEntry[];
+  /** Set only by the manual "Mark cycle complete" action — there's no single date that means "done picking". */
+  completedAt: string | null;
 
   production: ProductionDetails;
   activities: CropActivity[];
   createdAt: string;
 }
 
-export type CropCycleInput = Omit<CropCycle, "id" | "createdAt" | "activities"> & {
+export type CropCycleInput = Omit<CropCycle, "id" | "createdAt" | "activities" | "harvestLog"> & {
   activities?: CropActivity[];
+  harvestLog?: HarvestLogEntry[];
 };
 
 /* ------------------------------------------------------------------- Order */
 
 export type OrderStatus = "pending" | "delivered" | "completed";
 export type DeliveryMethod = "pickup" | "delivery";
-export type Unit = "KG" | "TON" | "SACK";
+
+/**
+ * One allocation from a single crop cycle. An order can hold several of
+ * these, so one buyer's requirement can be filled from several farmers.
+ * Farmer, plot and crop are always read through `cropCycleId` — never copied.
+ */
+export interface OrderLineItem {
+  id: ID;
+  cropCycleId: ID;
+  quantityKg: number;
+  pricePerKg: number;
+}
 
 export interface Order {
   id: ID;
   code: string; // PO-001
-  /** Orders hang off a completed crop cycle; farmer/plot/crop come from it. */
-  cropCycleId: ID;
-  quantity: number;
-  unit: Unit;
-  totalPrice: number;
   buyer: string;
+  orderDate: string;
+  /** When the buyer collects or receives the produce. Shown on the Calendar. */
+  deliveryDate: string;
   deliveryMethod: DeliveryMethod;
+  /** Tracked for the whole order, not per line item. */
   status: OrderStatus;
   notes: string;
+  lineItems: OrderLineItem[];
   createdAt: string;
 }
 
-export type OrderInput = Omit<Order, "id" | "code" | "createdAt">;
+export type OrderLineItemInput = Omit<OrderLineItem, "id">;
+
+export type OrderInput = Omit<Order, "id" | "code" | "createdAt" | "lineItems"> & {
+  lineItems: OrderLineItemInput[];
+};
 
 /* -------------------------------------------------------- View-model shapes */
 
@@ -222,26 +259,94 @@ export interface CropCycleSummary extends CropCycle {
   plotName: string;
   status: CropCycleStatus;
   totalCost: number;
+
+  /** Physical output: sum of every Harvest Log entry's quantity. */
+  harvestedQuantityKg: number;
+  /** Sum of every Order line item quantity referencing this cycle. */
+  soldQuantityKg: number;
+  /** Harvested so far − sold so far. Also shown as "unsold surplus". */
+  availableToSellKg: number;
+
+  /** Money only exists once sold — summed from Order line items. */
+  totalRevenue: number;
+  averageSalePricePerKg: number | null;
+  /**
+   * The kg the cycle's cost is spread over: expected output while picking is
+   * still under way, the actual harvest once the cycle is complete.
+   */
+  costBasisKg: number;
+  /** Total cost ÷ cost basis — the unit cost every kg must clear. Null with no basis. */
   breakEvenPricePerKg: number | null;
-  projectedRevenue: number;
+  /** Share of the total cost attributable to the kg sold so far (break-even × sold). */
+  costOfSoldKg: number;
+  /** (Revenue − cost of the kg sold) ÷ revenue. Null until something is sold. */
   marginPercent: number | null;
 }
 
-export interface OrderSummary extends Order {
+export interface OrderLineItemSummary extends OrderLineItem {
+  farmerId: ID;
   farmerName: string;
   plotName: string;
   cropName: string;
-  cycle: CropCycle | null;
+  varietyType: string;
+  lineTotal: number;
+}
+
+export interface OrderSummary extends Omit<Order, "lineItems"> {
+  lineItems: OrderLineItemSummary[];
+  totalQuantityKg: number;
+  totalPrice: number;
+  /** Distinct farmers supplying this order — an order may pull from several. */
+  farmerNames: string[];
+  cropNames: string[];
+}
+
+/** A row on the Supply Matching screen: harvested stock still unsold. */
+export interface SupplyMatch {
+  cropCycleId: ID;
+  farmerId: ID;
+  farmerName: string;
+  plotName: string;
+  cropRefId: ID;
+  cropName: string;
+  varietyType: string;
+  availableToSellKg: number;
+  harvestedQuantityKg: number;
+  estimatedPricePerKg: number;
+  lastHarvestDate: string | null;
+}
+
+/** Forward-looking expected supply, bucketed by period, for one crop. */
+export interface SupplyForecastBucket {
+  /** ISO date of the bucket start, used as a stable key. */
+  periodStart: string;
+  label: string;
+  expectedKg: number;
+  cycleCount: number;
+}
+
+export interface SupplyForecastGroup {
+  cropRefId: ID;
+  cropName: string;
+  totalExpectedKg: number;
+  buckets: SupplyForecastBucket[];
 }
 
 export interface CalendarActivity {
   id: string;
   type: ActivityType;
   date: string;
-  cropCycleId: ID;
+  /** Null for deliveries, which belong to an order rather than a single cycle. */
+  cropCycleId: ID | null;
+  orderId: ID | null;
+  /** Where tapping the entry goes. */
+  href: string;
   cropName: string;
   plotName: string;
   farmerName: string;
+  /** Primary and secondary lines shown on the card. */
+  title: string;
+  subtitle: string;
   /** Expected harvests still to happen are flagged so the UI can dim them. */
   projected: boolean;
 }

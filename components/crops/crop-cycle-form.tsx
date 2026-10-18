@@ -36,15 +36,12 @@ interface FormState {
   referencePricePerKg: string;
   plantingDate: string;
   expectedHarvestDate: string;
-  actualHarvestDate: string;
   seedCost: string;
   fertilizerCost: string;
   laborCost: string;
   otherCost: string;
   expectedOutputKg: string;
-  actualOutputKg: string;
   estimatedPricePerKg: string;
-  actualPricePerKg: string;
   method: string;
   deliveryFrequency: string;
   fertilizerType: string;
@@ -69,15 +66,12 @@ function initialState(cycle?: CropCycle): FormState {
     referencePricePerKg: cycle ? String(cycle.referencePricePerKg) : "",
     plantingDate: cycle?.plantingDate ?? "",
     expectedHarvestDate: cycle?.expectedHarvestDate ?? "",
-    actualHarvestDate: cycle?.actualHarvestDate ?? "",
     seedCost: cycle ? String(cycle.costs.seed) : "",
     fertilizerCost: cycle ? String(cycle.costs.fertilizer) : "",
     laborCost: cycle ? String(cycle.costs.labor) : "",
     otherCost: cycle ? String(cycle.costs.other) : "",
     expectedOutputKg: cycle ? String(cycle.expectedOutputKg) : "",
-    actualOutputKg: cycle?.actualOutputKg != null ? String(cycle.actualOutputKg) : "",
     estimatedPricePerKg: cycle ? String(cycle.estimatedPricePerKg) : "",
-    actualPricePerKg: cycle?.actualPricePerKg != null ? String(cycle.actualPricePerKg) : "",
     method: cycle?.production.method ?? "",
     deliveryFrequency: cycle?.production.deliveryFrequency ?? "",
     fertilizerType: cycle?.production.fertilizerType ?? "",
@@ -141,8 +135,8 @@ export function CropCycleForm({
 
   const totalCost =
     num(values.seedCost) + num(values.fertilizerCost) + num(values.laborCost) + num(values.otherCost);
-  const outputKg = num(values.actualOutputKg) || num(values.expectedOutputKg);
-  const pricePerKg = num(values.actualPricePerKg) || num(values.estimatedPricePerKg);
+  const outputKg = num(values.expectedOutputKg);
+  const pricePerKg = num(values.estimatedPricePerKg);
   const breakEven = outputKg > 0 ? totalCost / outputKg : null;
   const revenue = outputKg * pricePerKg;
   const margin = revenue > 0 ? ((revenue - totalCost) / revenue) * 100 : null;
@@ -153,7 +147,7 @@ export function CropCycleForm({
     if (!ref) return;
     setValues((prev) => {
       const expectedHarvestDate =
-        prev.plantingDate && !prev.actualHarvestDate
+        prev.plantingDate && !prev.expectedHarvestDate
           ? addDays(prev.plantingDate, ref.daysToHarvest)
           : prev.expectedHarvestDate;
       return {
@@ -199,13 +193,6 @@ export function CropCycleForm({
     ) {
       next.expectedHarvestDate = "Harvest cannot be before planting";
     }
-    if (
-      values.actualHarvestDate &&
-      values.plantingDate &&
-      values.actualHarvestDate < values.plantingDate
-    ) {
-      next.actualHarvestDate = "Harvest cannot be before planting";
-    }
     if (num(values.expectedOutputKg) <= 0) next.expectedOutputKg = "Expected output is required";
     setErrors(next);
     if (Object.keys(next).length) return;
@@ -224,7 +211,6 @@ export function CropCycleForm({
         referencePricePerKg: num(values.referencePricePerKg),
         plantingDate: values.plantingDate,
         expectedHarvestDate: values.expectedHarvestDate,
-        actualHarvestDate: values.actualHarvestDate || null,
         cultivatedAreaHectares,
         costs: {
           seed: num(values.seedCost),
@@ -233,9 +219,9 @@ export function CropCycleForm({
           other: num(values.otherCost),
         },
         expectedOutputKg: num(values.expectedOutputKg),
-        actualOutputKg: values.actualOutputKg ? num(values.actualOutputKg) : null,
         estimatedPricePerKg: num(values.estimatedPricePerKg),
-        actualPricePerKg: values.actualPricePerKg ? num(values.actualPricePerKg) : null,
+        // Harvest Log and completion are managed on the detail screen, not this form.
+        completedAt: cycle?.completedAt ?? null,
         production: {
           method: values.method || null,
           deliveryFrequency: values.deliveryFrequency || null,
@@ -367,19 +353,6 @@ export function CropCycleForm({
               onChange={(e) => set("expectedHarvestDate", e.target.value)}
             />
           </FieldGroup>
-          <FieldGroup
-            label="Actual harvest"
-            error={errors.actualHarvestDate}
-            htmlFor="actualHarvest"
-            hint="Leave empty until the crop is harvested"
-          >
-            <Input
-              id="actualHarvest"
-              type="date"
-              value={values.actualHarvestDate}
-              onChange={(e) => set("actualHarvestDate", e.target.value)}
-            />
-          </FieldGroup>
         </CardBody>
       </Card>
 
@@ -416,7 +389,7 @@ export function CropCycleForm({
         </CardBody>
       </Card>
 
-      <SectionHeading title="Output & Pricing" hint="Expected vs actual production" />
+      <SectionHeading title="Output & Pricing" hint="Upfront estimate for this cycle" />
       <Card className="mb-5">
         <CardBody className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
@@ -436,17 +409,6 @@ export function CropCycleForm({
                 placeholder="2000"
               />
             </FieldGroup>
-            <FieldGroup label="Actual output" htmlFor="actualOutput">
-              <InputWithSuffix
-                id="actualOutput"
-                suffix="kg"
-                type="number"
-                inputMode="decimal"
-                value={values.actualOutputKg}
-                onChange={(e) => set("actualOutputKg", e.target.value)}
-                placeholder="Once harvested"
-              />
-            </FieldGroup>
             <FieldGroup label="Estimated price" htmlFor="estimatedPrice">
               <InputWithSuffix
                 id="estimatedPrice"
@@ -459,23 +421,11 @@ export function CropCycleForm({
                 placeholder="0.45"
               />
             </FieldGroup>
-            <FieldGroup label="Actual price" htmlFor="actualPrice">
-              <InputWithSuffix
-                id="actualPrice"
-                suffix="$/kg"
-                type="number"
-                step="0.01"
-                inputMode="decimal"
-                value={values.actualPricePerKg}
-                onChange={(e) => set("actualPricePerKg", e.target.value)}
-                placeholder="Once sold"
-              />
-            </FieldGroup>
           </div>
         </CardBody>
       </Card>
 
-      <SectionHeading title="Break-even & Margin" hint="Calculated from costs, output and price" />
+      <SectionHeading title="Projected Break-even & Margin" hint="Based on the estimates above" />
       <Card className="mb-5">
         <CardBody className="grid grid-cols-2 gap-3">
           <DerivedField
@@ -491,7 +441,7 @@ export function CropCycleForm({
             <span className={revenue - totalCost >= 0 ? "font-semibold text-brand-700" : "font-semibold text-red-600"}>
               {formatCurrency(revenue - totalCost)}
             </span>
-            . Actual figures are used where recorded, otherwise the estimates.
+            . This updates automatically once harvests are logged on the crop cycle's detail screen.
           </div>
         </CardBody>
       </Card>

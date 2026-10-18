@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/ui/misc";
-import { haptic } from "@/lib/telegram";
+import { bindBackButton, haptic } from "@/lib/telegram";
+import { useTelegram } from "@/app/providers";
 
 /**
  * Green chrome shared by every screen. Variants mirror the design:
@@ -33,14 +34,24 @@ export function ScreenHeader({
   children?: React.ReactNode;
 }) {
   const router = useRouter();
+  const { inTelegram } = useTelegram();
   const showBack = Boolean(backHref || onBack);
 
-  const handleBack = () => {
+  const handleBack = React.useCallback(() => {
     haptic("light");
     if (onBack) return onBack();
     if (backHref) return router.push(backHref);
     router.back();
-  };
+  }, [onBack, backHref, router]);
+
+  // Inside Telegram, the native BackButton replaces the "Close" chevron in
+  // the app's own chrome — so this screen doesn't need to spend header space
+  // on its own back row. Outside Telegram (plain browser) there's no such
+  // chrome, so the in-header button below is the only way back.
+  React.useEffect(() => {
+    if (!showBack || !inTelegram) return;
+    return bindBackButton(handleBack);
+  }, [showBack, inTelegram, handleBack]);
 
   return (
     <header
@@ -49,7 +60,7 @@ export function ScreenHeader({
         className,
       )}
     >
-      {showBack ? (
+      {showBack && !inTelegram ? (
         <button
           type="button"
           onClick={handleBack}

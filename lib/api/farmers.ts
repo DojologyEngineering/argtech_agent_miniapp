@@ -1,5 +1,6 @@
 import { delay, getState, mutate, NotFoundError } from "../db";
 import { uid } from "../utils";
+import { assertNoSettledSales } from "./guards";
 import type { Certificate, Farmer, FarmerInput, FarmerSummary, ID } from "../types";
 
 export function farmerFullName(f: Pick<Farmer, "firstName" | "lastName">) {
@@ -18,7 +19,10 @@ function toSummary(farmer: Farmer): FarmerSummary {
     ...farmer,
     fullName: farmerFullName(farmer),
     plotCount: plotIds.length,
-    orderCount: db.orders.filter((o) => cycleIds.includes(o.cropCycleId)).length,
+    // Orders holding at least one line item drawn from this farmer's cycles.
+    orderCount: db.orders.filter((o) =>
+      o.lineItems.some((i) => cycleIds.includes(i.cropCycleId)),
+    ).length,
     certificateCount: db.certificates.filter((c) => c.farmerId === farmer.id).length,
     locationLabel: farmerLocation(farmer),
   };
@@ -77,9 +81,19 @@ export async function updateFarmer(id: ID, input: FarmerInput): Promise<Farmer> 
 
 /** Removes the farmer and everything hanging off them. */
 export async function deleteFarmer(id: ID): Promise<void> {
+  assertNoSettledSales(
+    getState()
+      .cropCycles.filter((c) => c.farmerId === id)
+      .map((c) => c.id),
+    "this farmer",
+  );
   mutate((db) => {
     const cycleIds = db.cropCycles.filter((c) => c.farmerId === id).map((c) => c.id);
-    db.orders = db.orders.filter((o) => !cycleIds.includes(o.cropCycleId));
+    // Strip this farmer's allocations from pending orders, then drop orders left with nothing.
+    db.orders.forEach((order) => {
+      order.lineItems = order.lineItems.filter((i) => !cycleIds.includes(i.cropCycleId));
+    });
+    db.orders = db.orders.filter((o) => o.lineItems.length > 0);
     db.cropCycles = db.cropCycles.filter((c) => c.farmerId !== id);
     db.plots = db.plots.filter((p) => p.farmerId !== id);
     db.certificates = db.certificates.filter((c) => c.farmerId !== id);

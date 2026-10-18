@@ -52,7 +52,7 @@ export const SEED_FARMERS: Farmer[] = [
     district: "Siem Reap City",
     commune: "Wat Bo",
     village: "Wat Bo",
-    notes: "Long-standing supplier, reliable with wet-season jasmine.",
+    notes: "Long-standing supplier, reliable with wet-season vegetables.",
     documents: { profilePhotoName: null, nationalIdName: "sokha-nid.jpg" },
     createdAt: daysFromToday(-400),
   },
@@ -154,7 +154,7 @@ export const SEED_CERTIFICATES: Certificate[] = [
   {
     id: "cert_4",
     farmerId: "farmer_4",
-    title: "Rice Quality Handling",
+    title: "Fresh Produce Handling",
     issuedDate: daysFromToday(-95),
     expiryDate: daysFromToday(635),
     notes: "",
@@ -165,7 +165,7 @@ export const SEED_PLOTS: Plot[] = [
   plot(
     "plot_1",
     "farmer_1",
-    "Rice Paddy A",
+    "Vegetable Plot A",
     "own",
     "Clay Soil",
     "Wat Bo, Siem Reap City, Siem Reap",
@@ -174,7 +174,7 @@ export const SEED_PLOTS: Plot[] = [
   plot(
     "plot_2",
     "farmer_1",
-    "Wheat Field B",
+    "Vegetable Plot B",
     "rent",
     "Loam Soil",
     "Trang village, Siem Reap City, Siem Reap",
@@ -192,7 +192,7 @@ export const SEED_PLOTS: Plot[] = [
   plot(
     "plot_4",
     "farmer_2",
-    "Rice Paddy C",
+    "Vegetable Plot C",
     "own",
     "Clay Soil",
     "Svay Por, Battambang City, Battambang",
@@ -201,7 +201,7 @@ export const SEED_PLOTS: Plot[] = [
   plot(
     "plot_5",
     "farmer_3",
-    "Rice Field D",
+    "Vegetable Plot D",
     "rent",
     "Silt Soil",
     "Ta Ches, Stueng Saen, Kampong Thom",
@@ -210,7 +210,7 @@ export const SEED_PLOTS: Plot[] = [
   plot(
     "plot_6",
     "farmer_4",
-    "Rice Paddy E",
+    "Vegetable Plot E",
     "own",
     "Sandy Soil",
     "Ampil Ta Pok, Ba Phnum, Prey Veng",
@@ -230,6 +230,12 @@ export const SEED_PLOTS: Plot[] = [
 const ref = (id: string) => CROP_REFS.find((c) => c.id === id)!;
 const areaOf = (plotId: string) => SEED_PLOTS.find((p) => p.id === plotId)!.areaHectares;
 
+interface HarvestSeed {
+  offset: number;
+  quantityKg: number;
+  note?: string;
+}
+
 interface CycleSeed {
   id: string;
   farmerId: string;
@@ -237,12 +243,12 @@ interface CycleSeed {
   cropRefId: string;
   plantingOffset: number;
   harvestOffset: number;
-  actualHarvestOffset: number | null;
   costs: CropCycle["costs"];
   expectedOutputKg: number;
-  actualOutputKg: number | null;
   estimatedPricePerKg: number;
-  actualPricePerKg: number | null;
+  harvests?: HarvestSeed[];
+  /** Offset the agent tapped "Mark cycle complete" — omit while still picking. */
+  completedOffset?: number;
   production?: Partial<CropCycle["production"]>;
   extraActivities?: { type: ActivityType; offset: number; note: string }[];
 }
@@ -261,14 +267,17 @@ function cycle(input: CycleSeed): CropCycle {
     referencePricePerKg: r.referencePricePerKg,
     plantingDate: daysFromToday(input.plantingOffset),
     expectedHarvestDate: daysFromToday(input.harvestOffset),
-    actualHarvestDate:
-      input.actualHarvestOffset === null ? null : daysFromToday(input.actualHarvestOffset),
     cultivatedAreaHectares: areaOf(input.plotId),
     costs: input.costs,
     expectedOutputKg: input.expectedOutputKg,
-    actualOutputKg: input.actualOutputKg,
     estimatedPricePerKg: input.estimatedPricePerKg,
-    actualPricePerKg: input.actualPricePerKg,
+    harvestLog: (input.harvests ?? []).map((h, i) => ({
+      id: `${input.id}_harvest_${i}`,
+      date: daysFromToday(h.offset),
+      quantityKg: h.quantityKg,
+      note: h.note ?? "",
+    })),
+    completedAt: input.completedOffset != null ? daysFromToday(input.completedOffset) : null,
     production: {
       method: input.production?.method ?? null,
       deliveryFrequency: input.production?.deliveryFrequency ?? null,
@@ -287,228 +296,239 @@ function cycle(input: CycleSeed): CropCycle {
 }
 
 export const SEED_CROP_CYCLES: CropCycle[] = [
+  // Completed, multi-harvest: cucumber was picked every few days for two weeks.
   cycle({
     id: "cycle_1",
     farmerId: "farmer_1",
     plotId: "plot_1",
-    cropRefId: "crop_jasmine",
-    plantingOffset: -195,
-    harvestOffset: -20,
-    actualHarvestOffset: -18,
-    costs: { seed: 180, fertilizer: 240, labor: 420, other: 90 },
-    expectedOutputKg: 2400,
-    actualOutputKg: 2650,
-    estimatedPricePerKg: 0.45,
-    actualPricePerKg: 0.47,
+    cropRefId: "crop_cucumber",
+    plantingOffset: -75,
+    harvestOffset: -35,
+    costs: { seed: 40, fertilizer: 60, labor: 150, other: 20 },
+    expectedOutputKg: 900,
+    estimatedPricePerKg: 0.35,
+    harvests: [
+      { offset: -33, quantityKg: 120, note: "First picking" },
+      { offset: -29, quantityKg: 150 },
+      { offset: -25, quantityKg: 160 },
+      { offset: -21, quantityKg: 140 },
+      { offset: -17, quantityKg: 110 },
+      { offset: -13, quantityKg: 90, note: "Final picking, vines declining" },
+    ],
+    completedOffset: -10,
     production: {
       method: "Conventional",
-      deliveryFrequency: "One-off",
+      deliveryFrequency: "Weekly",
       fertilizerType: "NPK",
-      pesticideUsed: "None",
-      notes: "Good wet season, no lodging.",
+      pesticideUsed: "Neem oil",
+      notes: "Picked twice weekly during peak season.",
     },
-    extraActivities: [
-      { type: "irrigation", offset: -150, note: "Second irrigation round" },
-      { type: "fertilization", offset: -120, note: "NPK top dressing" },
-    ],
+    extraActivities: [{ type: "irrigation", offset: -50, note: "Drip line set up" }],
   }),
+  // Harvesting, in progress: tomato picking has started, more expected.
   cycle({
     id: "cycle_2",
     farmerId: "farmer_2",
     plotId: "plot_3",
-    cropRefId: "crop_basmati",
-    plantingOffset: -170,
-    harvestOffset: -35,
-    actualHarvestOffset: -33,
-    costs: { seed: 260, fertilizer: 310, labor: 520, other: 140 },
-    expectedOutputKg: 3100,
-    actualOutputKg: 2980,
-    estimatedPricePerKg: 0.8,
-    actualPricePerKg: 0.78,
-    production: { method: "Organic", fertilizerType: "Compost", notes: "" },
-    extraActivities: [{ type: "irrigation", offset: -130, note: "Canal water released" }],
+    cropRefId: "crop_tomato",
+    plantingOffset: -80,
+    harvestOffset: -20,
+    costs: { seed: 60, fertilizer: 90, labor: 220, other: 35 },
+    expectedOutputKg: 1400,
+    estimatedPricePerKg: 0.6,
+    harvests: [
+      { offset: -18, quantityKg: 180, note: "First picking" },
+      { offset: -11, quantityKg: 220 },
+      { offset: -4, quantityKg: 240, note: "Peak production" },
+    ],
+    production: { method: "Conventional", deliveryFrequency: "Weekly", fertilizerType: "NPK", pesticideUsed: "Mancozeb", notes: "" },
+    extraActivities: [{ type: "irrigation", offset: -60, note: "Canal water released" }],
   }),
+  // Completed, single harvest: cabbage is cut all at once.
   cycle({
     id: "cycle_3",
     farmerId: "farmer_3",
     plotId: "plot_5",
-    cropRefId: "crop_brown",
-    plantingOffset: -210,
-    harvestOffset: -55,
-    actualHarvestOffset: -52,
-    costs: { seed: 210, fertilizer: 280, labor: 480, other: 70 },
-    expectedOutputKg: 3600,
-    actualOutputKg: 3820,
-    estimatedPricePerKg: 0.5,
-    actualPricePerKg: 0.52,
-    production: { method: "GAP", fertilizerType: "Urea", pesticideUsed: "Limited", notes: "" },
-    extraActivities: [{ type: "fertilization", offset: -160, note: "Urea split application" }],
+    cropRefId: "crop_cabbage",
+    plantingOffset: -75,
+    harvestOffset: -10,
+    costs: { seed: 45, fertilizer: 70, labor: 160, other: 25 },
+    expectedOutputKg: 2000,
+    estimatedPricePerKg: 0.3,
+    harvests: [{ offset: -8, quantityKg: 2150, note: "Full plot cut in one day" }],
+    completedOffset: -7,
+    production: { method: "GAP", fertilizerType: "Compost", pesticideUsed: "None", notes: "Good head formation this cycle." },
   }),
+  // Completed, multi-harvest: eggplant kept producing for over a month before the plot was cleared.
   cycle({
     id: "cycle_4",
     farmerId: "farmer_4",
     plotId: "plot_6",
-    cropRefId: "crop_sushi",
-    plantingOffset: -160,
-    harvestOffset: -80,
-    actualHarvestOffset: -78,
-    costs: { seed: 150, fertilizer: 190, labor: 360, other: 60 },
-    expectedOutputKg: 1800,
-    actualOutputKg: 1740,
-    estimatedPricePerKg: 0.95,
-    actualPricePerKg: 0.93,
-    production: { method: "Conventional", notes: "" },
+    cropRefId: "crop_eggplant",
+    plantingOffset: -100,
+    harvestOffset: -30,
+    costs: { seed: 35, fertilizer: 55, labor: 190, other: 30 },
+    expectedOutputKg: 1100,
+    estimatedPricePerKg: 0.4,
+    harvests: [
+      { offset: -28, quantityKg: 140 },
+      { offset: -21, quantityKg: 160 },
+      { offset: -14, quantityKg: 150 },
+      { offset: -7, quantityKg: 130 },
+      { offset: -1, quantityKg: 100, note: "Final harvest before plot cleared" },
+    ],
+    completedOffset: 0,
+    production: { method: "Conventional", fertilizerType: "NPK", pesticideUsed: "Spinosad", notes: "" },
   }),
+  // Ready to harvest: expected date has passed but no picking logged yet.
   cycle({
     id: "cycle_5",
     farmerId: "farmer_1",
     plotId: "plot_2",
-    cropRefId: "crop_arborio",
-    plantingOffset: -190,
-    harvestOffset: -110,
-    actualHarvestOffset: -108,
-    costs: { seed: 200, fertilizer: 170, labor: 300, other: 55 },
-    expectedOutputKg: 1500,
-    actualOutputKg: 1620,
-    estimatedPricePerKg: 1.2,
-    actualPricePerKg: 1.15,
-    production: { method: "Mixed", notes: "" },
+    cropRefId: "crop_longbean",
+    plantingOffset: -50,
+    harvestOffset: -5,
+    costs: { seed: 25, fertilizer: 40, labor: 110, other: 15 },
+    expectedOutputKg: 750,
+    estimatedPricePerKg: 0.5,
+    production: { method: "Conventional", notes: "Pods forming well, ready for first pick." },
   }),
+  // Growing: recently planted, expected harvest still weeks away.
   cycle({
     id: "cycle_6",
     farmerId: "farmer_2",
     plotId: "plot_4",
-    cropRefId: "crop_jasmine",
-    plantingOffset: -140,
-    harvestOffset: 40,
-    actualHarvestOffset: null,
-    costs: { seed: 190, fertilizer: 250, labor: 400, other: 80 },
-    expectedOutputKg: 2500,
-    actualOutputKg: null,
-    estimatedPricePerKg: 0.46,
-    actualPricePerKg: null,
-    production: { method: "Conventional", fertilizerType: "NPK", notes: "" },
-    extraActivities: [
-      { type: "irrigation", offset: -60, note: "Pump irrigation" },
-      { type: "fertilization", offset: -40, note: "Second top dressing" },
-      { type: "irrigation", offset: 4, note: "Scheduled irrigation" },
-    ],
+    cropRefId: "crop_morningglory",
+    plantingOffset: -10,
+    harvestOffset: 15,
+    costs: { seed: 10, fertilizer: 15, labor: 40, other: 5 },
+    expectedOutputKg: 400,
+    estimatedPricePerKg: 0.25,
+    production: { method: "Conventional", fertilizerType: "Urea", notes: "" },
   }),
+  // Harvesting, in progress: chili picked weekly, plants still flowering.
   cycle({
     id: "cycle_7",
     farmerId: "farmer_3",
     plotId: "plot_5",
-    cropRefId: "crop_basmati",
-    plantingOffset: -152,
-    harvestOffset: -2,
-    actualHarvestOffset: null,
-    costs: { seed: 240, fertilizer: 300, labor: 500, other: 120 },
-    expectedOutputKg: 3400,
-    actualOutputKg: null,
-    estimatedPricePerKg: 0.79,
-    actualPricePerKg: null,
-    production: { method: "GAP", notes: "Ready to cut, waiting on the mill." },
+    cropRefId: "crop_chili",
+    plantingOffset: -60,
+    harvestOffset: -15,
+    costs: { seed: 50, fertilizer: 65, labor: 200, other: 40 },
+    expectedOutputKg: 850,
+    estimatedPricePerKg: 1.5,
+    harvests: [
+      { offset: -12, quantityKg: 60, note: "First picking" },
+      { offset: -6, quantityKg: 80 },
+      { offset: -1, quantityKg: 70, note: "Picking continues weekly" },
+    ],
+    production: { method: "Conventional", pesticideUsed: "Abamectin", notes: "Picking weekly, plants still flowering." },
   }),
+  // Harvesting: cucumber just started, only an early thinning pick logged.
   cycle({
     id: "cycle_8",
     farmerId: "farmer_5",
     plotId: "plot_7",
-    cropRefId: "crop_sushi",
-    plantingOffset: -45,
-    harvestOffset: 95,
-    actualHarvestOffset: null,
-    costs: { seed: 130, fertilizer: 160, labor: 280, other: 40 },
-    expectedOutputKg: 1200,
-    actualOutputKg: null,
-    estimatedPricePerKg: 0.95,
-    actualPricePerKg: null,
+    cropRefId: "crop_cucumber",
+    plantingOffset: -35,
+    harvestOffset: 5,
+    costs: { seed: 30, fertilizer: 45, labor: 100, other: 15 },
+    expectedOutputKg: 700,
+    estimatedPricePerKg: 0.35,
+    harvests: [{ offset: -2, quantityKg: 90, note: "Early thinning picks" }],
     production: { method: "Organic", fertilizerType: "Manure", notes: "" },
-    extraActivities: [
-      { type: "fertilization", offset: -12, note: "Manure applied" },
-      { type: "irrigation", offset: 6, note: "Planned irrigation" },
-    ],
   }),
+  // Growing: newly planted, nothing to log yet.
   cycle({
     id: "cycle_9",
     farmerId: "farmer_4",
     plotId: "plot_6",
-    cropRefId: "crop_brown",
-    plantingOffset: -18,
-    harvestOffset: 152,
-    actualHarvestOffset: null,
-    costs: { seed: 145, fertilizer: 180, labor: 340, other: 50 },
-    expectedOutputKg: 1900,
-    actualOutputKg: null,
-    estimatedPricePerKg: 0.51,
-    actualPricePerKg: null,
+    cropRefId: "crop_tomato",
+    plantingOffset: -8,
+    harvestOffset: 52,
+    costs: { seed: 55, fertilizer: 80, labor: 150, other: 20 },
+    expectedOutputKg: 1300,
+    estimatedPricePerKg: 0.6,
     extraActivities: [{ type: "irrigation", offset: 2, note: "First irrigation" }],
   }),
 ];
 
+/**
+ * Orders are buyer-facing transactions made of line items, so one order can
+ * be filled from several farmers' crop cycles. PO-004 does exactly that —
+ * two cucumber growers filling one buyer's requirement.
+ *
+ * Resulting supply picture (harvested / sold / available):
+ *   cycle_1 cucumber  770 / 700 /  70
+ *   cycle_2 tomato    640 /   0 / 640   ← unsold surplus
+ *   cycle_3 cabbage  2150 /2150 /   0   ← fully sold
+ *   cycle_4 eggplant  680 / 680 /   0
+ *   cycle_7 chili     210 / 150 /  60
+ *   cycle_8 cucumber   90 /  60 /  30
+ */
 export const SEED_ORDERS: Order[] = [
   {
     id: "order_1",
     code: "PO-001",
-    cropCycleId: "cycle_1",
-    quantity: 2650,
-    unit: "KG",
-    totalPrice: 1245.5,
-    buyer: "Green Valley Co.",
-    deliveryMethod: "delivery",
+    buyer: "Local Market Vendor",
+    orderDate: daysFromToday(-16),
+    deliveryDate: daysFromToday(-14),
+    deliveryMethod: "pickup",
     status: "completed",
-    notes: "Collected from the village drying yard.",
+    notes: "Sold across multiple market days.",
+    lineItems: [{ id: "line_1a", cropCycleId: "cycle_1", quantityKg: 500, pricePerKg: 0.35 }],
     createdAt: daysFromToday(-16),
   },
   {
     id: "order_2",
     code: "PO-002",
-    cropCycleId: "cycle_2",
-    quantity: 2980,
-    unit: "KG",
-    totalPrice: 2324.4,
-    buyer: "Fresh Market Ltd.",
-    deliveryMethod: "pickup",
-    status: "delivered",
+    buyer: "Vegetable Wholesaler",
+    orderDate: daysFromToday(-9),
+    deliveryDate: daysFromToday(-8),
+    deliveryMethod: "delivery",
+    status: "completed",
     notes: "",
-    createdAt: daysFromToday(-30),
+    lineItems: [{ id: "line_2a", cropCycleId: "cycle_3", quantityKg: 2150, pricePerKg: 0.28 }],
+    createdAt: daysFromToday(-9),
   },
   {
     id: "order_3",
     code: "PO-003",
-    cropCycleId: "cycle_3",
-    quantity: 3820,
-    unit: "KG",
-    totalPrice: 1986.4,
-    buyer: "Starch Factory",
-    deliveryMethod: "delivery",
-    status: "pending",
-    notes: "Awaiting truck scheduling.",
-    createdAt: daysFromToday(-9),
+    buyer: "Phsar Doeum Kor Market",
+    orderDate: daysFromToday(-3),
+    deliveryDate: daysFromToday(-1),
+    deliveryMethod: "pickup",
+    status: "delivered",
+    notes: "",
+    lineItems: [{ id: "line_3a", cropCycleId: "cycle_4", quantityKg: 680, pricePerKg: 0.39 }],
+    createdAt: daysFromToday(-3),
   },
+  // One buyer's cucumber requirement, filled from two different farmers.
   {
     id: "order_4",
     code: "PO-004",
-    cropCycleId: "cycle_4",
-    quantity: 1740,
-    unit: "KG",
-    totalPrice: 1618.2,
-    buyer: "Rice Export Inc.",
-    deliveryMethod: "pickup",
-    status: "completed",
-    notes: "",
-    createdAt: daysFromToday(-72),
+    buyer: "Fresh Mart Phnom Penh",
+    orderDate: daysFromToday(-2),
+    deliveryDate: daysFromToday(2),
+    deliveryMethod: "delivery",
+    status: "pending",
+    notes: "Combined cucumber order across two growers.",
+    lineItems: [
+      { id: "line_4a", cropCycleId: "cycle_1", quantityKg: 200, pricePerKg: 0.34 },
+      { id: "line_4b", cropCycleId: "cycle_8", quantityKg: 60, pricePerKg: 0.4 },
+    ],
+    createdAt: daysFromToday(-2),
   },
   {
     id: "order_5",
     code: "PO-005",
-    cropCycleId: "cycle_5",
-    quantity: 1620,
-    unit: "KG",
-    totalPrice: 1863,
-    buyer: "Angkor Premium Rice",
-    deliveryMethod: "delivery",
+    buyer: "Spice Trader Co.",
+    orderDate: daysFromToday(-1),
+    deliveryDate: daysFromToday(3),
+    deliveryMethod: "pickup",
     status: "pending",
-    notes: "Buyer requested split delivery.",
-    createdAt: daysFromToday(-6),
+    notes: "",
+    lineItems: [{ id: "line_5a", cropCycleId: "cycle_7", quantityKg: 150, pricePerKg: 1.55 }],
+    createdAt: daysFromToday(-1),
   },
 ];

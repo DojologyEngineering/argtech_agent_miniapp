@@ -23,7 +23,12 @@ export interface DbShape {
   orders: Order[];
 }
 
-const STORAGE_KEY = "argtech.field-agent.v1";
+// Bump this whenever DbShape's contents change shape (fields added/removed,
+// renamed, or restructured on Farmer/Plot/CropCycle/Order/etc). Old data
+// saved under a previous key is simply ignored — it does NOT get migrated —
+// so a device with stale data always falls back to a fresh, correctly-shaped
+// seed instead of the app rendering half-shaped records and breaking.
+const STORAGE_KEY = "argtech.field-agent.v4";
 
 function seed(): DbShape {
   return {
@@ -110,5 +115,17 @@ export class NotFoundError extends Error {
   constructor(entity: string, id: string) {
     super(`${entity} ${id} not found`);
     this.name = "NotFoundError";
+  }
+}
+
+/**
+ * A change that is well-formed but would leave the data inconsistent (selling
+ * more than was picked, deleting produce that already shipped…). The message is
+ * written for the agent and is shown as-is.
+ */
+export class ConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ConflictError";
   }
 }

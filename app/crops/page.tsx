@@ -10,9 +10,13 @@ import { Badge, EmptyState, FilterChips, ListSkeleton, SearchInput } from "@/com
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@/lib/hooks/use-query";
 import { listCropCycles } from "@/lib/api/crop-cycles";
-import { CROP_STATUS_LABEL } from "@/lib/derive";
+import { CROP_STATUS_LABEL, CROP_STATUS_TONE } from "@/lib/derive";
 import { formatDate, formatHectares, formatKg } from "@/lib/format";
-import type { CropCycleStatus } from "@/lib/types";
+import type { CropCycleStatus, HarvestLogEntry } from "@/lib/types";
+
+function latestHarvestDate(entries: HarvestLogEntry[]) {
+  return entries.reduce((latest, e) => (e.date > latest ? e.date : latest), entries[0].date);
+}
 
 type StatusFilter = CropCycleStatus | "all";
 
@@ -20,14 +24,9 @@ const FILTERS: { value: StatusFilter; label: string }[] = [
   { value: "all", label: "All" },
   { value: "growing", label: "Growing" },
   { value: "ready_to_harvest", label: "Ready to harvest" },
-  { value: "harvested", label: "Harvested" },
+  { value: "harvesting", label: "Harvesting" },
+  { value: "completed", label: "Completed" },
 ];
-
-const STATUS_TONE = {
-  growing: "green",
-  ready_to_harvest: "amber",
-  harvested: "blue",
-} as const;
 
 export default function CropsPage() {
   const [search, setSearch] = useState("");
@@ -74,7 +73,7 @@ export default function CropsPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <p className="truncate text-[15px] font-bold text-ink">{cycle.cropName}</p>
-                    <Badge tone={STATUS_TONE[cycle.status]} dot>
+                    <Badge tone={CROP_STATUS_TONE[cycle.status]} dot>
                       {CROP_STATUS_LABEL[cycle.status]}
                     </Badge>
                   </div>
@@ -83,8 +82,8 @@ export default function CropsPage() {
                   </p>
                   <p className="mt-1 truncate text-xs text-muted">
                     Planted {formatDate(cycle.plantingDate)} ·{" "}
-                    {cycle.actualHarvestDate
-                      ? `Harvested ${formatDate(cycle.actualHarvestDate)}`
+                    {cycle.harvestLog.length
+                      ? `Last picked ${formatDate(latestHarvestDate(cycle.harvestLog))}`
                       : `Expected ${formatDate(cycle.expectedHarvestDate)}`}
                   </p>
                 </div>
@@ -93,8 +92,8 @@ export default function CropsPage() {
               <div className="mt-3 flex items-center justify-between border-t border-line/70 pt-2.5 text-xs text-muted">
                 <span>{formatHectares(cycle.cultivatedAreaHectares)}</span>
                 <span>
-                  {cycle.actualOutputKg != null
-                    ? `Actual ${formatKg(cycle.actualOutputKg)}`
+                  {cycle.harvestedQuantityKg > 0
+                    ? `Harvested ${formatKg(cycle.harvestedQuantityKg)}`
                     : `Expected ${formatKg(cycle.expectedOutputKg)}`}
                 </span>
                 <span
