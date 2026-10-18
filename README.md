@@ -135,8 +135,10 @@ dataset — it exists only in this phase.
 ### Farmer
 List with search; detail with **Primary Phone** / **Secondary Phone** labelled
 consistently, personal info, linked plots, crop cycles and purchase orders (each linking
-through), document uploads (profile photo, national ID), and certificates; full add/edit forms with cascading Province → District → Commune →
-Village selects. Farmer cards count **orders**, not "carts".
+through), document uploads (profile photo, national ID), certificates (type GAP / Organic /
+Other, issuer, scope, expiry, photo — staff prepare a buyer-safe copy before buyers see it);
+full add/edit forms with cascading Province → District → Commune → Village selects. Consent to
+share records with buyers is handled when a farmer is onboarded, so there is no toggle here. Farmer cards count **orders**, not "carts".
 
 ### Plots
 Belongs to one farmer. The **area calculation is the single source of truth**: the agent
@@ -155,7 +157,11 @@ another farmer.
 Picking is recorded as a **Harvest Log**: one entry per trip (date, kg, note), because
 vegetables are picked repeatedly over weeks. A harvest carries no price — money exists only on
 order line items. **Field activities** (irrigation, fertilization) are logged from the same
-screen. Status is derived: *Growing* → *Ready to harvest* (expected date reached) →
+screen. **Production details** (method, delivery frequency, fertilizer type, pesticide used
+with optional details) are optional to save, but a "Production details missing" badge shows on
+the cycle until method, fertilizer and pesticide are set. The detail screen also shows the
+crop's read-only **specification** (ripeness, size, condition, best used within) — what buyers
+expect, so the farmer can be told before picking. Status is derived: *Growing* → *Ready to harvest* (expected date reached) →
 *Harvesting* (first pick logged) → *Completed* (the agent taps **Mark cycle complete**;
 **Reopen cycle** undoes it).
 
@@ -175,23 +181,47 @@ screen**. Seasons are **Wet Season** / **Dry Season** only.
 ### Calendar
 Read-only, with month-grid, list and supply-forecast views. Entries are derived from crop
 cycles (planting, each logged picking, irrigation, fertilization) and from **orders**
-(a *Delivery* entry on each order's delivery date). Each badge carries its **own** activity
-type with a colour legend; anything still ahead (expected harvests, pending deliveries) is
-marked "Planned". Tapping an entry opens its crop cycle or order.
+(a rose-coloured *Delivery / handover* entry on each live order's delivery date, flagged when
+the handover check is due). Each badge carries its **own** activity type with a colour legend;
+anything still ahead (expected harvests, requested or confirmed deliveries) is marked "Planned". Tapping an entry opens its crop cycle or order.
 
-### Orders
-Orders are built on the **Supply Matching** screen: pick a crop, optionally set the buyer's
-target quantity, then allocate kg and price against harvested-but-unsold stock from any
-number of farmers. Each allocation is one **line item** on the order; farmer, plot and crop are
-always read through the line's crop cycle. An allocation can't exceed what that cycle has
-picked and not yet sold, and the same rule is enforced in the service layer.
+### Orders (view-only)
+Buyers order in the Buyer App and staff manage orders in the Admin Portal, so field agents
+**view** orders here — no create, edit, status change or cancel (the old `/orders/new` and
+`/orders/:id/edit` URLs redirect). Statuses use the Buyer App labels: Requested, Confirmed,
+Delivered, Completed, Declined, Cancelled — "Delivered" reads **Picked up** on a pickup order.
 
-Status moves forward only — Pending → Delivered → Completed — through **Mark Delivered** /
-**Mark Completed**; it is not editable in the form. Each order has an order date and a
-delivery date (shown on the Calendar). Completed orders are locked: no edit, no cancel.
-Produce that went into a delivered or completed order also can't be deleted — the cycle,
-its plot and its farmer are protected — while pending orders just have the allocation
-released. Saving says **Save Order**.
+The list shows every kind of order the Buyer App can produce, with the same scrollable filter
+chips (All, Requested, Confirmed, Delivered, Completed, Declined, Cancelled) and search. Each card
+carries a type tag (*Order now* or *Request*), a method tag (*Delivery* or *Pickup*), "Not in
+catalog" for other-crop requests, and the date that matters — "Delivery 20 Oct", "Pickup 22 Oct"
+or "Needed by 29 Oct" for requests; the order date is on the detail screen. A **Request** that
+is still Requested is not matched to farmers yet: the card shows the crop, requested quantity and
+"Not yet matched to a farmer", and the detail adds a note that staff will match it. Declined and
+Cancelled orders show their reason on the card and detail, and have no handover check. The detail
+screen also shows source (Buyer app or Staff), the order date, buyer requirements, **Pickup
+details** (meeting point and time, once a pickup order is Confirmed) and a read-only status flow. Prices follow the buyer price tiers (under 200 kg /
+200–999 kg / 1,000 kg+), chosen by the order's total quantity and applied to the whole order
+(`lib/mock/crop-refs.ts`).
+
+The agent's part is the **handover check**, per line item, so each farmer's produce is checked
+separately. On a Confirmed order the line shows the crop specification and any buyer
+requirements as reference, then: received kg, accepted kg (never above received), rejected kg
+(calculated), a reason (required when anything is rejected), up to 4 photos, a note, and — for
+Pick up orders — "Buyer representative present". Saving locks the check and marks the line
+**Checked**; it never changes the order status (staff mark Delivered in the Admin Portal).
+Delivered and completed orders show the saved check read-only. A Confirmed order whose delivery
+or pickup date is today (or earlier) and that still has an unchecked line shows a calm blue
+**Check due today** tag — on the list, the detail and the calendar — and nothing shows before the
+date. The dashboard's **Handovers due** card counts those same orders and opens the Orders list
+filtered to them.
+
+The only other agent action is **Report a problem** on a line (Farmer cannot deliver, Quantity
+short, Quality concern, Other, plus a note). It adds a "Problem reported" badge on the line and
+the order and leaves the status alone.
+
+Produce that went into a delivered or completed order is protected: its crop cycle, plot and
+farmer can't be deleted, and harvest edits can't drop below what is already allocated.
 
 ---
 
@@ -200,3 +230,8 @@ released. Saving says **Save Order**.
 - Data lives in `localStorage` on the device; it is not shared between agents.
 - Document uploads record the chosen file name only — no file is stored or transmitted.
 - The notification bell on the dashboard is presentational.
+- Photos (handover, certificate) are recorded as generated placeholder images, not uploaded.
+- Demo data is sample data: all farmers, plots and crop cycles are placed in the Kampong Cham
+  pilot area (Kang Meas, Srey Santhor, Kampong Siem).
+- The agent-side order builder (`components/orders/supply-matching.tsx` and the create/update
+  functions in `lib/api/orders.ts`) is no longer reachable from the UI and can be deleted.

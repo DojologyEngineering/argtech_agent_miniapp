@@ -54,6 +54,6 @@ export function boundaryCentroid(boundary: LatLng[]): LatLng | null {
   }
 }
 
-/** Siem Reap rice belt — sensible default view before a plot is drawn. */
-export const DEFAULT_MAP_CENTER: LatLng = [13.3622, 103.8597];
+/** Kampong Cham pilot area, on the Mekong — sensible default view before a plot is drawn. */
+export const DEFAULT_MAP_CENTER: LatLng = [12.014, 105.382];
 export const DEFAULT_MAP_ZOOM = 16;

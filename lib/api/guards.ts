@@ -1,15 +1,17 @@
 import { ConflictError, getState } from "../db";
+import { isOrderSettled, orderCountsAsSold } from "../derive";
 import type { ID } from "../types";
 
 /**
  * Orders already delivered or completed are the record of what really shipped,
- * so produce that went into them can't be deleted out from under them. Pending
- * orders are still negotiable — their allocations are released instead.
+ * so produce that went into them can't be deleted out from under them. Orders
+ * that are still requested or confirmed are not settled — their allocations are
+ * released instead.
  */
 export function assertNoSettledSales(cycleIds: ID[], subject: string) {
   if (cycleIds.length === 0) return;
   const codes = getState()
-    .orders.filter((o) => o.status !== "pending")
+    .orders.filter((o) => isOrderSettled(o.status))
     .filter((o) => o.lineItems.some((i) => cycleIds.includes(i.cropCycleId)))
     .map((o) => o.code);
   if (codes.length === 0) return;
@@ -24,7 +26,7 @@ export function assertNoSettledSales(cycleIds: ID[], subject: string) {
 /** Kg of a cycle already allocated on orders, optionally ignoring one order. */
 export function soldKgForCycle(cycleId: ID, excludeOrderId?: ID): number {
   return getState()
-    .orders.filter((o) => o.id !== excludeOrderId)
+    .orders.filter((o) => o.id !== excludeOrderId && orderCountsAsSold(o.status))
     .flatMap((o) => o.lineItems)
     .filter((i) => i.cropCycleId === cycleId)
     .reduce((sum, i) => sum + i.quantityKg, 0);

@@ -38,7 +38,7 @@ import { listOrdersForFarmer } from "@/lib/api/orders";
 import {
   CROP_STATUS_LABEL,
   CROP_STATUS_TONE,
-  ORDER_STATUS_LABEL,
+  orderStatusLabel,
   ORDER_STATUS_TONE,
 } from "@/lib/derive";
 import { formatCurrency, formatDate, formatHectares, formatKg } from "@/lib/format";
@@ -242,7 +242,7 @@ export default function FarmerDetailPage() {
                         <div className="flex items-center gap-2">
                           <p className="truncate text-sm font-bold text-ink">{order.code}</p>
                           <Badge tone={ORDER_STATUS_TONE[order.status]} dot>
-                            {ORDER_STATUS_LABEL[order.status]}
+                            {orderStatusLabel(order.status, order.deliveryMethod)}
                           </Badge>
                         </div>
                         <p className="truncate text-xs text-muted">{order.buyer}</p>
@@ -288,6 +288,7 @@ export default function FarmerDetailPage() {
         <div>
           <SectionHeading
             title={`Certificates (${certificates?.length ?? 0})`}
+            hint="Staff prepare a buyer-safe copy before buyers see it"
             action={
               <Button asChild variant="subtle" size="sm">
                 <Link href={`/farmers/${farmer.id}/certificates/new`}>
@@ -311,16 +312,24 @@ export default function FarmerDetailPage() {
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-bold text-ink">{cert.title}</p>
+                          <p className="text-sm font-bold text-ink">{cert.type}</p>
                           {expired ? <Badge tone="red">Expired</Badge> : null}
                         </div>
-                        <p className="mt-0.5 text-xs text-muted">
-                          Issued {formatDate(cert.issuedDate)}
+                        <p className="mt-0.5 text-xs text-ink">{cert.scope}</p>
+                        <p className="text-xs text-muted">
+                          {cert.issuer}
                           {cert.expiryDate ? ` · Expires ${formatDate(cert.expiryDate)}` : " · No expiry"}
                         </p>
-                        {cert.notes ? (
-                          <p className="mt-1 text-xs text-muted">{cert.notes}</p>
-                        ) : null}
+                        {cert.photo ? (
+                          // eslint-disable-next-line @next/next/no-img-element -- generated placeholder data URI
+                          <img
+                            src={cert.photo}
+                            alt={`${cert.type} certificate photo`}
+                            className="mt-2 aspect-[4/3] w-32 rounded-lg border border-line object-cover"
+                          />
+                        ) : (
+                          <p className="mt-1 text-xs text-muted/80">No photo uploaded</p>
+                        )}
                       </div>
                       <div className="flex shrink-0 gap-1">
                         <Link
@@ -358,7 +367,7 @@ export default function FarmerDetailPage() {
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
         title={`Delete ${farmer.fullName}?`}
-        description="Their plots and crop cycles are removed, and their produce is released from any pending order. A farmer whose produce is in a delivered or completed order can't be deleted. This cannot be undone."
+        description="Their plots and crop cycles are removed, and their produce is released from any requested or confirmed order. A farmer whose produce is in a delivered or completed order can't be deleted. This cannot be undone."
         confirmLabel="Delete"
         destructive
         onConfirm={async () => {

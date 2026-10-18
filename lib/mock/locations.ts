@@ -13,6 +13,34 @@ export interface ProvinceNode {
 }
 
 export const PROVINCES: ProvinceNode[] = [
+  // Pilot area. Commune and village names are sample data.
+  {
+    name: "Kampong Cham",
+    districts: [
+      {
+        name: "Kang Meas",
+        communes: [
+          { name: "Angkor Ban", villages: ["Prek Koy", "Phum Kandal", "Ta Sar"] },
+          { name: "Ampil", villages: ["Kampong Tnaot", "Prey Kmeng", "Ampil Leu"] },
+          { name: "Chrey Vien", villages: ["Prek Tonloap", "Chrey Vien", "Krala"] },
+        ],
+      },
+      {
+        name: "Srey Santhor",
+        communes: [
+          { name: "Baray", villages: ["Ta Ong", "Baray", "Svay Chrum"] },
+          { name: "Kaoh Krabei", villages: ["Kaoh Krabei", "Prek Dambouk"] },
+        ],
+      },
+      {
+        name: "Kampong Siem",
+        communes: [
+          { name: "Kampong Siem", villages: ["Prek Pdau", "Kampong Siem", "Chamkar Leu"] },
+          { name: "Veal Vong", villages: ["Veal Vong", "Trapeang Thmor"] },
+        ],
+      },
+    ],
+  },
   {
     name: "Siem Reap",
     districts: [

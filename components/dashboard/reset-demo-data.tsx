@@ -15,14 +15,17 @@ export function ResetDemoData() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="mx-auto flex items-center gap-1.5 py-2 text-xs text-muted"
-      >
-        <RotateCcw className="size-3.5" />
-        Reset demo data
-      </button>
+      <div className="text-center">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="mx-auto flex items-center gap-1.5 py-2 text-xs text-muted"
+        >
+          <RotateCcw className="size-3.5" />
+          Reset demo data
+        </button>
+        <p className="text-[11px] text-muted/80">Demo data is sample data.</p>
+      </div>
 
       <ConfirmDialog
         open={open}

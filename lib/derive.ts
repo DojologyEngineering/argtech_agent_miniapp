@@ -1,11 +1,16 @@
-import { toISODate } from "./format";
+import { formatNumber, toISODate } from "./format";
 import type {
   CropCycle,
   CropCycleStatus,
   CropCosts,
   HarvestLogEntry,
+  DeliveryMethod,
+  Order,
   OrderLineItem,
   OrderStatus,
+  OrderSummary,
+  ProductionDetails,
+  RequestedCrop,
 } from "./types";
 
 export function totalCost(costs: CropCosts): number {
@@ -95,24 +100,125 @@ export function isOrderEligible(status: CropCycleStatus): boolean {
 }
 
 export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
-  pending: "Pending",
+  requested: "Requested",
+  confirmed: "Confirmed",
   delivered: "Delivered",
   completed: "Completed",
+  declined: "Declined",
+  cancelled: "Cancelled",
 };
 
-export const ORDER_STATUS_TONE: Record<OrderStatus, "amber" | "green" | "blue"> = {
-  pending: "amber",
+/** "Delivered" reads "Picked up" on a pickup order — the buyer collected it. */
+export function orderStatusLabel(status: OrderStatus, method: DeliveryMethod): string {
+  return status === "delivered" && method === "pickup" ? "Picked up" : ORDER_STATUS_LABEL[status];
+}
+
+/** The date that matters on a card: needed-by for open requests, otherwise delivery or pickup. */
+export function orderDateLabel(order: Pick<Order, "status" | "deliveryMethod">): string {
+  if (order.status === "requested" || order.status === "declined") return "Needed by";
+  return order.deliveryMethod === "pickup" ? "Pickup" : "Delivery";
+}
+
+/** "Pumpkin" for catalog crops, "Other crop: Pumpkin" for crops that are not listed. */
+export function requestedCropLabel(requested: Pick<RequestedCrop, "cropRefId" | "cropName">): string {
+  return requested.cropRefId ? requested.cropName : `Other crop: ${requested.cropName}`;
+}
+
+/**
+ * "150 kg requested" while a request is unmatched, "400 of 500 kg" when staff confirmed
+ * less than was asked for, otherwise "300 kg".
+ */
+export function orderQuantityLabel(
+  order: Pick<OrderSummary, "lineItems" | "totalQuantityKg" | "requested">,
+): string {
+  if (order.lineItems.length === 0) return `${formatNumber(order.requested.quantityKg)} kg requested`;
+  if (order.totalQuantityKg !== order.requested.quantityKg) {
+    return `${formatNumber(order.totalQuantityKg)} of ${formatNumber(order.requested.quantityKg)} kg`;
+  }
+  return `${formatNumber(order.totalQuantityKg)} kg`;
+}
+
+/** What the produce is checked against, in the buyer's words; "Standard" when they asked for nothing extra. */
+export function orderRequirementsLabel(
+  order: Pick<Order, "requirements" | "requirementsText" | "requested">,
+): string {
+  if (!order.requested.cropRefId) return order.requirementsText || "To be agreed with ARG TECH";
+  const { ripeness, size } = order.requirements;
+  const parts = [ripeness && `Ripeness: ${ripeness}`, size && `Size: ${size}`].filter(Boolean);
+  return parts.length ? parts.join(" · ") : "Standard";
+}
+
+export const ORDER_STATUS_TONE: Record<OrderStatus, "neutral" | "amber" | "green" | "blue" | "red"> = {
+  requested: "neutral",
+  confirmed: "amber",
   delivered: "green",
   completed: "blue",
+  declined: "red",
+  cancelled: "neutral",
 };
 
-/** Orders move forward only: pending → delivered → completed. */
+/** Orders move forward only: requested → confirmed → delivered → completed. */
 export function nextOrderStatus(status: OrderStatus): OrderStatus | null {
-  if (status === "pending") return "delivered";
+  if (status === "requested") return "confirmed";
+  if (status === "confirmed") return "delivered";
   if (status === "delivered") return "completed";
   return null;
 }
 
+/** Position on the Requested → Completed flow; 0 for orders that left it (declined, cancelled). */
 export function orderStatusStep(status: OrderStatus): number {
-  return status === "pending" ? 1 : status === "delivered" ? 2 : 3;
+  switch (status) {
+    case "requested":
+      return 1;
+    case "confirmed":
+      return 2;
+    case "delivered":
+      return 3;
+    case "completed":
+      return 4;
+    default:
+      return 0;
+  }
+}
+
+/** Declined and cancelled orders release their produce — it no longer counts as sold. */
+export function orderCountsAsSold(status: OrderStatus): boolean {
+  return status !== "declined" && status !== "cancelled";
+}
+
+/** Delivered or completed: the produce has left the farm and the order is the record of it. */
+export function isOrderSettled(status: OrderStatus): boolean {
+  return status === "delivered" || status === "completed";
+}
+
+/** The handover check is filled in at Confirmed and stays visible afterwards. */
+export function showsHandoverCheck(status: OrderStatus): boolean {
+  return status === "confirmed" || status === "delivered" || status === "completed";
+}
+
+/**
+ * A handover is due once a Confirmed order reaches its delivery date and some
+ * line still has no saved check. Delivered and completed orders are no longer due.
+ */
+export function isHandoverDue(
+  order: Pick<Order, "status" | "deliveryDate" | "lineItems">,
+  today = toISODate(new Date()),
+): boolean {
+  return (
+    order.status === "confirmed" &&
+    order.deliveryDate <= today &&
+    order.lineItems.some((line) => !line.handoverCheck)
+  );
+}
+
+/** Problems can be reported once an order is Confirmed, and until it is completed. */
+export function canReportProblem(status: OrderStatus): boolean {
+  return status === "confirmed" || status === "delivered";
+}
+
+/** True when production method, fertilizer type or pesticide use hasn't been filled in. */
+export function productionDetailsMissing(
+  production: Pick<ProductionDetails, "method" | "fertilizerType" | "pesticideUsed">,
+): boolean {
+  return !production.method || !production.fertilizerType || !production.pesticideUsed;
 }

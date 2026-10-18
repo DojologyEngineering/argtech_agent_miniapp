@@ -33,10 +33,11 @@ import { ACTIVITY_LABEL } from "@/lib/api/calendar";
 import {
   CROP_STATUS_LABEL,
   CROP_STATUS_TONE,
-  isOrderEligible,
-  ORDER_STATUS_LABEL,
+  orderStatusLabel,
   ORDER_STATUS_TONE,
+  productionDetailsMissing,
 } from "@/lib/derive";
+import { findCropSpec } from "@/lib/mock/crop-refs";
 import { formatCurrency, formatDate, formatHectares, formatKg } from "@/lib/format";
 import { haptic } from "@/lib/telegram";
 import { errorMessage } from "@/lib/utils";
@@ -75,11 +76,12 @@ export default function CropCycleDetailPage() {
   }
 
   const linkedOrders = orders ?? [];
-  const canRaiseOrder = isOrderEligible(cycle.status) && cycle.availableToSellKg > 0;
   const canMarkComplete = cycle.status !== "completed" && cycle.harvestLog.length > 0;
   // Revenue is only for the kg sold, so it's weighed against those kg's share of the cost.
   const profit = cycle.totalRevenue - cycle.costOfSoldKg;
   const isCompleted = cycle.status === "completed";
+  const productionMissing = productionDetailsMissing(cycle.production);
+  const spec = findCropSpec(cycle.cropRefId);
   const basisLabel =
     cycle.completedAt && cycle.harvestedQuantityKg > 0
       ? "actual harvest"
@@ -115,6 +117,11 @@ export default function CropCycleDetailPage() {
               </Badge>
               {cycle.completedAt ? (
                 <p className="mt-1 text-xs text-muted">Marked complete {formatDate(cycle.completedAt)}</p>
+              ) : null}
+              {productionMissing ? (
+                <Badge tone="amber" className="mt-2">
+                  Production details missing
+                </Badge>
               ) : null}
             </div>
             <div className="text-right">
@@ -168,6 +175,23 @@ export default function CropCycleDetailPage() {
             </CardBody>
           </Card>
         </div>
+
+        {spec ? (
+          <div>
+            <SectionHeading
+              title="Crop Specification"
+              hint="What buyers expect. Tell the farmer before picking."
+            />
+            <Card>
+              <CardBody className="grid grid-cols-2 gap-4">
+                <DataPoint label="Ripeness" value={spec.ripeness} />
+                <DataPoint label="Size" value={spec.size} />
+                <DataPoint label="Condition" value={spec.condition} />
+                <DataPoint label="Best used within" value={spec.bestUsedWithin} />
+              </CardBody>
+            </Card>
+          </div>
+        ) : null}
 
         <div>
           <SectionHeading title="Costs" hint="Itemised inputs for this cycle" />
@@ -375,29 +399,37 @@ export default function CropCycleDetailPage() {
           </Button>
         ) : null}
 
-        {cycle.production.method ||
-        cycle.production.deliveryFrequency ||
-        cycle.production.fertilizerType ||
-        cycle.production.pesticideUsed ||
-        cycle.production.notes ? (
-          <div>
-            <SectionHeading title="Production Details" />
-            <Card>
-              <CardBody className="grid grid-cols-2 gap-4">
-                <DataPoint label="Production method" value={cycle.production.method ?? "—"} />
-                <DataPoint
-                  label="Delivery frequency"
-                  value={cycle.production.deliveryFrequency ?? "—"}
-                />
-                <DataPoint label="Fertilizer type" value={cycle.production.fertilizerType ?? "—"} />
-                <DataPoint label="Pesticide used" value={cycle.production.pesticideUsed ?? "—"} />
-                {cycle.production.notes ? (
-                  <DataPoint label="Notes" value={cycle.production.notes} className="col-span-2" />
-                ) : null}
-              </CardBody>
-            </Card>
-          </div>
-        ) : null}
+        <div>
+          <SectionHeading
+            title="Production Details"
+            action={
+              productionMissing ? <Badge tone="amber">Production details missing</Badge> : undefined
+            }
+          />
+          <Card>
+            <CardBody className="grid grid-cols-2 gap-4">
+              <DataPoint label="Production method" value={cycle.production.method ?? "—"} />
+              <DataPoint
+                label="Delivery frequency"
+                value={cycle.production.deliveryFrequency ?? "—"}
+              />
+              <DataPoint label="Fertilizer type" value={cycle.production.fertilizerType ?? "—"} />
+              <DataPoint
+                label="Pesticide used"
+                value={
+                  cycle.production.pesticideUsed
+                    ? cycle.production.pesticideDetails
+                      ? `${cycle.production.pesticideUsed} — ${cycle.production.pesticideDetails}`
+                      : cycle.production.pesticideUsed
+                    : "—"
+                }
+              />
+              {cycle.production.notes ? (
+                <DataPoint label="Notes" value={cycle.production.notes} className="col-span-2" />
+              ) : null}
+            </CardBody>
+          </Card>
+        </div>
 
         <div>
           <SectionHeading
@@ -483,7 +515,7 @@ export default function CropCycleDetailPage() {
                           <div className="flex items-center gap-2">
                             <p className="truncate text-sm font-bold text-ink">{order.code}</p>
                             <Badge tone={ORDER_STATUS_TONE[order.status]} dot>
-                              {ORDER_STATUS_LABEL[order.status]}
+                              {orderStatusLabel(order.status, order.deliveryMethod)}
                             </Badge>
                           </div>
                           <p className="truncate text-xs text-muted">{order.buyer}</p>
@@ -497,17 +529,9 @@ export default function CropCycleDetailPage() {
                   })
                 : null}
 
-              {canRaiseOrder ? (
-                <Button asChild variant="subtle" block>
-                  <Link href={`/orders/new?cropRefId=${cycle.cropRefId}`}>
-                    <ShoppingCart /> Sell surplus ({formatKg(cycle.availableToSellKg)} available)
-                  </Link>
-                </Button>
-              ) : !linkedOrders.length ? (
+              {!linkedOrders.length ? (
                 <p className="py-4 text-center text-sm text-muted">
-                  {cycle.harvestedQuantityKg > 0
-                    ? "All harvested produce for this cycle has already been sold."
-                    : "Log a harvest before raising a purchase order."}
+                  No purchase orders include this cycle yet. Orders come from the Buyer App and staff.
                 </p>
               ) : null}
             </CardBody>
@@ -523,7 +547,7 @@ export default function CropCycleDetailPage() {
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
         title="Delete this crop cycle?"
-        description="Its allocations are released from any pending purchase order (an order left with nothing is removed). A cycle that already supplied a delivered or completed order can't be deleted."
+        description="Its allocations are released from any requested or confirmed purchase order (an order left with nothing is removed). A cycle that already supplied a delivered or completed order can't be deleted."
         confirmLabel="Delete"
         destructive
         onConfirm={async () => {

@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Save } from "lucide-react";
+import { Info, Save } from "lucide-react";
 import { Card, CardBody, SectionHeading } from "@/components/ui/card";
-import { FieldGroup, Input, Textarea } from "@/components/ui/field";
+import { FieldGroup, Input } from "@/components/ui/field";
+import { Select, toOptions } from "@/components/ui/select";
+import { PhotoPicker } from "@/components/ui/photo-picker";
 import { Button } from "@/components/ui/button";
 import { StickyFooter } from "@/components/layout/app-shell";
-import type { Certificate } from "@/lib/types";
+import { CERTIFICATE_TYPES, type Certificate, type CertificateType } from "@/lib/types";
 import { haptic } from "@/lib/telegram";
 
 export type CertificateValues = Omit<Certificate, "id" | "farmerId">;
@@ -25,10 +27,11 @@ export function CertificateForm({
 }) {
   const router = useRouter();
   const [values, setValues] = useState<CertificateValues>({
-    title: certificate?.title ?? "",
-    issuedDate: certificate?.issuedDate ?? "",
+    type: certificate?.type ?? "GAP",
+    issuer: certificate?.issuer ?? "",
+    scope: certificate?.scope ?? "",
     expiryDate: certificate?.expiryDate ?? null,
-    notes: certificate?.notes ?? "",
+    photo: certificate?.photo ?? null,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -36,18 +39,15 @@ export function CertificateForm({
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     const next: Record<string, string> = {};
-    if (!values.title.trim()) next.title = "Certificate title is required";
-    if (!values.issuedDate) next.issuedDate = "Issued date is required";
-    if (values.expiryDate && values.issuedDate && values.expiryDate < values.issuedDate) {
-      next.expiryDate = "Expiry cannot be before the issued date";
-    }
+    if (!values.issuer.trim()) next.issuer = "Issuer is required";
+    if (!values.scope.trim()) next.scope = "Say what the certificate covers";
     setErrors(next);
     if (Object.keys(next).length) return;
 
     setSaving(true);
     haptic("medium");
     try {
-      await onSubmit(values);
+      await onSubmit({ ...values, issuer: values.issuer.trim(), scope: values.scope.trim() });
     } finally {
       setSaving(false);
     }
@@ -56,44 +56,65 @@ export function CertificateForm({
   return (
     <form onSubmit={handleSubmit}>
       <SectionHeading title="Certificate Details" />
-      <Card>
+      <Card className="mb-5">
         <CardBody className="space-y-4">
-          <FieldGroup label="Certificate Title" required error={errors.title} htmlFor="title">
+          <FieldGroup label="Type" required htmlFor="type">
+            <Select
+              id="type"
+              value={values.type}
+              onValueChange={(v) => setValues((p) => ({ ...p, type: v as CertificateType }))}
+              options={toOptions(CERTIFICATE_TYPES)}
+            />
+          </FieldGroup>
+
+          <FieldGroup label="Issuer" required error={errors.issuer} htmlFor="issuer">
             <Input
-              id="title"
-              value={values.title}
-              onChange={(e) => setValues((p) => ({ ...p, title: e.target.value }))}
-              placeholder="e.g., Organic Certification"
+              id="issuer"
+              value={values.issuer}
+              onChange={(e) => setValues((p) => ({ ...p, issuer: e.target.value }))}
+              placeholder="Who issued it"
             />
           </FieldGroup>
 
-          <div className="grid grid-cols-2 gap-3">
-            <FieldGroup label="Issued Date" required error={errors.issuedDate} htmlFor="issued">
-              <Input
-                id="issued"
-                type="date"
-                value={values.issuedDate}
-                onChange={(e) => setValues((p) => ({ ...p, issuedDate: e.target.value }))}
-              />
-            </FieldGroup>
-            <FieldGroup label="Expiry Date" error={errors.expiryDate} htmlFor="expiry">
-              <Input
-                id="expiry"
-                type="date"
-                value={values.expiryDate ?? ""}
-                onChange={(e) => setValues((p) => ({ ...p, expiryDate: e.target.value || null }))}
-              />
-            </FieldGroup>
+          <FieldGroup
+            label="Scope"
+            required
+            error={errors.scope}
+            htmlFor="scope"
+            hint="What it covers"
+          >
+            <Input
+              id="scope"
+              value={values.scope}
+              onChange={(e) => setValues((p) => ({ ...p, scope: e.target.value }))}
+              placeholder="e.g. Tomato production"
+            />
+          </FieldGroup>
+
+          <FieldGroup label="Expiry date" htmlFor="expiry" hint="Leave empty if it doesn't expire">
+            <Input
+              id="expiry"
+              type="date"
+              value={values.expiryDate ?? ""}
+              onChange={(e) => setValues((p) => ({ ...p, expiryDate: e.target.value || null }))}
+            />
+          </FieldGroup>
+        </CardBody>
+      </Card>
+
+      <SectionHeading title="Photo" hint="Photograph the original certificate" />
+      <Card>
+        <CardBody className="space-y-3">
+          <PhotoPicker
+            photos={values.photo ? [values.photo] : []}
+            onChange={(photos) => setValues((p) => ({ ...p, photo: photos[photos.length - 1] ?? null }))}
+            max={1}
+            label="certificate"
+          />
+          <div className="flex items-start gap-2 rounded-xl bg-canvas p-3 text-xs text-muted">
+            <Info className="mt-0.5 size-4 shrink-0 text-brand-600" />
+            <p>Staff prepare a buyer-safe copy before buyers see it.</p>
           </div>
-
-          <FieldGroup label="Notes" htmlFor="notes">
-            <Textarea
-              id="notes"
-              value={values.notes}
-              onChange={(e) => setValues((p) => ({ ...p, notes: e.target.value }))}
-              placeholder="Additional notes about this certificate..."
-            />
-          </FieldGroup>
         </CardBody>
       </Card>
 

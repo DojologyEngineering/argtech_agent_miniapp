@@ -45,7 +45,9 @@ const ACTIVITY_STYLE: Record<ActivityType, { chip: string; dot: string }> = {
   harvesting: { chip: "bg-amber-400 text-amber-950", dot: "bg-amber-400" },
   irrigation: { chip: "bg-sky-500 text-white", dot: "bg-sky-500" },
   fertilization: { chip: "bg-violet-500 text-white", dot: "bg-violet-500" },
-  delivery: { chip: "bg-blue-600 text-white", dot: "bg-blue-600" },
+  // Teal: apart from planting green, harvest amber, irrigation sky blue and fertilization violet,
+  // and nowhere near the red used for declined, cancelled and problem states.
+  delivery: { chip: "bg-teal-600 text-white", dot: "bg-teal-600" },
 };
 
 type View = "calendar" | "list" | "forecast";
@@ -433,7 +435,7 @@ function Legend() {
       {(Object.keys(ACTIVITY_STYLE) as ActivityType[]).map((type) => (
         <span key={type} className="flex items-center gap-1.5 text-xs text-muted">
           <span className={cn("size-2 rounded-full", ACTIVITY_STYLE[type].dot)} />
-          {ACTIVITY_LABEL[type]}
+          {type === "delivery" ? "Delivery / handover" : ACTIVITY_LABEL[type]}
         </span>
       ))}
       <span className="text-xs text-muted">· Read-only, from crop cycles and orders</span>

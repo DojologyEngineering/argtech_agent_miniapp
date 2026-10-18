@@ -10,7 +10,7 @@ import { Badge, EmptyState, FilterChips, ListSkeleton, SearchInput } from "@/com
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@/lib/hooks/use-query";
 import { listCropCycles } from "@/lib/api/crop-cycles";
-import { CROP_STATUS_LABEL, CROP_STATUS_TONE } from "@/lib/derive";
+import { CROP_STATUS_LABEL, CROP_STATUS_TONE, productionDetailsMissing } from "@/lib/derive";
 import { formatDate, formatHectares, formatKg } from "@/lib/format";
 import type { CropCycleStatus, HarvestLogEntry } from "@/lib/types";
 
@@ -76,6 +76,9 @@ export default function CropsPage() {
                     <Badge tone={CROP_STATUS_TONE[cycle.status]} dot>
                       {CROP_STATUS_LABEL[cycle.status]}
                     </Badge>
+                    {productionDetailsMissing(cycle.production) ? (
+                      <Badge tone="amber">Production details missing</Badge>
+                    ) : null}
                   </div>
                   <p className="truncate text-xs text-muted">
                     {cycle.farmerName} · {cycle.plotName}

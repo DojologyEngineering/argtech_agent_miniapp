@@ -11,7 +11,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const showNav = ROOT_ROUTES.includes(pathname as (typeof ROOT_ROUTES)[number]);
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col bg-canvas">
+    <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col bg-canvas md:shadow-[0_0_0_1px_rgba(16,33,24,0.06),0_8px_40px_rgba(16,33,24,0.08)]">
       {children}
       {showNav ? <BottomNav /> : null}
     </div>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   ArrowRight,
   Bell,
+  ClipboardCheck,
   CalendarDays,
   MapPin,
   Package,
@@ -21,11 +22,9 @@ import { HarvestChart } from "@/components/dashboard/harvest-chart";
 import { ResetDemoData } from "@/components/dashboard/reset-demo-data";
 import { useQuery } from "@/lib/hooks/use-query";
 import { getDashboard } from "@/lib/api/dashboard";
-import { ORDER_STATUS_LABEL } from "@/lib/derive";
+import { ORDER_STATUS_TONE, orderStatusLabel } from "@/lib/derive";
 import { formatDate, formatNumber } from "@/lib/format";
 import { useTelegram } from "./providers";
-
-const ORDER_TONE = { pending: "amber", delivered: "green", completed: "blue" } as const;
 
 export default function DashboardPage() {
   const { user } = useTelegram();
@@ -80,6 +79,38 @@ export default function DashboardPage() {
             href="/orders"
           />
         </div>
+
+        <Link href="/orders?filter=handover" className="block">
+          <Card className="flex items-center gap-3 p-4 active:bg-canvas">
+            <span
+              className={
+                data && data.stats.handoversDue > 0
+                  ? "flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600"
+                  : "flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600"
+              }
+            >
+              <ClipboardCheck className="size-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-ink">Handovers due</p>
+              <p className="text-xs text-muted">
+                {data
+                  ? data.stats.handoversDue > 0
+                    ? "Confirmed orders waiting for a handover check"
+                    : "No handover checks waiting"
+                  : "Checking orders..."}
+              </p>
+            </div>
+            {data ? (
+              <span className="text-2xl font-extrabold leading-none text-ink">
+                {formatNumber(data.stats.handoversDue)}
+              </span>
+            ) : (
+              <Skeleton className="h-7 w-8" />
+            )}
+            <ArrowRight className="size-4 shrink-0 text-muted/70" />
+          </Card>
+        </Link>
 
         <Card>
           <CardBody>
@@ -178,8 +209,8 @@ export default function DashboardPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-bold text-ink">{order.code}</p>
-                        <Badge tone={ORDER_TONE[order.status]} dot>
-                          {ORDER_STATUS_LABEL[order.status]}
+                        <Badge tone={ORDER_STATUS_TONE[order.status]} dot>
+                          {orderStatusLabel(order.status, order.deliveryMethod)}
                         </Badge>
                       </div>
                       <p className="truncate text-xs text-muted">

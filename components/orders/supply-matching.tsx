@@ -191,7 +191,7 @@ export function SupplyMatching({
         orderDate,
         deliveryDate,
         deliveryMethod,
-        status: initial?.status ?? "pending",
+        status: initial?.status ?? "requested",
         notes,
         lineItems: allocatedRows.map((m) => ({
           cropCycleId: m.cropCycleId,

@@ -120,7 +120,8 @@ export async function setFarmerDocument(
 export async function listCertificates(farmerId: ID): Promise<Certificate[]> {
   const rows = getState()
     .certificates.filter((c) => c.farmerId === farmerId)
-    .sort((a, b) => b.issuedDate.localeCompare(a.issuedDate));
+    // Soonest expiry first; certificates that never expire go last.
+    .sort((a, b) => (a.expiryDate ?? "9999").localeCompare(b.expiryDate ?? "9999"));
   return delay(rows);
 }
 

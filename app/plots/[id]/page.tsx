@@ -144,7 +144,7 @@ export default function PlotDetailPage() {
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
         title={`Delete ${plot.name}?`}
-        description="Its crop cycles are removed and their produce is released from any pending order. A plot that already supplied a delivered or completed order can't be deleted."
+        description="Its crop cycles are removed and their produce is released from any requested or confirmed order. A plot that already supplied a delivered or completed order can't be deleted."
         confirmLabel="Delete"
         destructive
         onConfirm={async () => {

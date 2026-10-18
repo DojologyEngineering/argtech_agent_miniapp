@@ -16,10 +16,12 @@ import { formatCurrency, formatHectares, toISODate } from "@/lib/format";
 import { haptic } from "@/lib/telegram";
 import {
   DELIVERY_FREQUENCIES,
-  FERTILIZER_TYPES,
+  FERTILIZER_OPTIONS,
+  PESTICIDE_OPTIONS,
   PRODUCTION_METHODS,
   type CropCycle,
   type CropCycleInput,
+  type PesticideUse,
   type Season,
 } from "@/lib/types";
 
@@ -45,7 +47,8 @@ interface FormState {
   method: string;
   deliveryFrequency: string;
   fertilizerType: string;
-  pesticideUsed: string;
+  pesticideUsed: PesticideUse | "";
+  pesticideDetails: string;
   notes: string;
 }
 
@@ -76,6 +79,7 @@ function initialState(cycle?: CropCycle): FormState {
     deliveryFrequency: cycle?.production.deliveryFrequency ?? "",
     fertilizerType: cycle?.production.fertilizerType ?? "",
     pesticideUsed: cycle?.production.pesticideUsed ?? "",
+    pesticideDetails: cycle?.production.pesticideDetails ?? "",
     notes: cycle?.production.notes ?? "",
   };
 }
@@ -227,6 +231,8 @@ export function CropCycleForm({
           deliveryFrequency: values.deliveryFrequency || null,
           fertilizerType: values.fertilizerType || null,
           pesticideUsed: values.pesticideUsed || null,
+          // Details only mean something when pesticide was used (or the agent isn't sure).
+          pesticideDetails: values.pesticideUsed === "Not used" ? "" : values.pesticideDetails.trim(),
           notes: values.notes,
         },
       });
@@ -471,18 +477,32 @@ export function CropCycleForm({
                 id="fertilizerType"
                 value={values.fertilizerType}
                 onValueChange={(v) => set("fertilizerType", v)}
-                options={toOptions(FERTILIZER_TYPES)}
+                options={FERTILIZER_OPTIONS.map((o) => ({
+                  value: o.value,
+                  label: o.value,
+                  group: o.group,
+                }))}
               />
             </FieldGroup>
             <FieldGroup label="Pesticide used" htmlFor="pesticide">
-              <Input
+              <Select
                 id="pesticide"
                 value={values.pesticideUsed}
-                onChange={(e) => set("pesticideUsed", e.target.value)}
-                placeholder="e.g. None"
+                onValueChange={(v) => set("pesticideUsed", v as PesticideUse)}
+                options={toOptions(PESTICIDE_OPTIONS)}
               />
             </FieldGroup>
           </div>
+          {values.pesticideUsed === "Used" || values.pesticideUsed === "Not sure" ? (
+            <FieldGroup label="Pesticide details" htmlFor="pesticideDetails" hint="Optional">
+              <Input
+                id="pesticideDetails"
+                value={values.pesticideDetails}
+                onChange={(e) => set("pesticideDetails", e.target.value)}
+                placeholder="Which product, how often"
+              />
+            </FieldGroup>
+          ) : null}
           <FieldGroup label="Notes" htmlFor="notes">
             <Textarea
               id="notes"

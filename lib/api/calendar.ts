@@ -1,6 +1,6 @@
 import { format, parseISO, startOfMonth, startOfWeek } from "date-fns";
 import { delay, getState } from "../db";
-import { cropCycleStatus } from "../derive";
+import { cropCycleStatus, isHandoverDue } from "../derive";
 import { formatNumber, toISODate } from "../format";
 import { farmerFullName } from "./farmers";
 import type {
@@ -92,6 +92,8 @@ export async function listCalendarActivities(): Promise<CalendarActivity[]> {
 
   // Deliveries close the loop: the day produce leaves the farm for a buyer.
   db.orders.forEach((order) => {
+    // Declined and cancelled orders never happen, so they don't belong on the calendar.
+    if (order.status === "declined" || order.status === "cancelled") return;
     const lines = order.lineItems.map((item) => {
       const cycle = db.cropCycles.find((c) => c.id === item.cropCycleId);
       const farmer = cycle ? db.farmers.find((f) => f.id === cycle.farmerId) : undefined;
@@ -101,15 +103,21 @@ export async function listCalendarActivities(): Promise<CalendarActivity[]> {
         quantityKg: item.quantityKg,
       };
     });
-    const cropNames = Array.from(new Set(lines.map((l) => l.cropName)));
-    const totalKg = lines.reduce((sum, l) => sum + l.quantityKg, 0);
+    // A request not yet matched to farmers has no lines: show what was asked for instead.
+    const matched = lines.length > 0;
+    const cropNames = matched
+      ? Array.from(new Set(lines.map((l) => l.cropName)))
+      : [order.requested.cropName];
+    const totalKg = matched
+      ? lines.reduce((sum, l) => sum + l.quantityKg, 0)
+      : order.requested.quantityKg;
 
     activities.push({
       id: `${order.id}:delivery`,
       type: "delivery",
       date: order.deliveryDate,
-      // Only a pending order is still ahead of us; delivered/completed already happened.
-      projected: order.status === "pending",
+      // Requested and confirmed orders are still ahead of us; delivered/completed already happened.
+      projected: order.status === "requested" || order.status === "confirmed",
       cropCycleId: null,
       orderId: order.id,
       href: `/orders/${order.id}`,
@@ -119,7 +127,7 @@ export async function listCalendarActivities(): Promise<CalendarActivity[]> {
       title: `${order.code} · ${order.buyer}`,
       subtitle: `${cropNames.join(", ")} · ${formatNumber(totalKg)} kg · ${
         order.deliveryMethod === "pickup" ? "Pick up" : "Delivery"
-      }`,
+      }${isHandoverDue(order, today) ? " · Check due today" : ""}`,
     });
   });
 

@@ -9,6 +9,8 @@ export interface SelectOption {
   value: string;
   label: string;
   description?: string;
+  /** Options sharing a group sit together under a small heading. Keep them adjacent. */
+  group?: string;
 }
 
 interface SelectProps {
@@ -52,28 +54,37 @@ export function Select({
         <SelectPrimitive.Content
           position="popper"
           sideOffset={6}
-          className="z-[1200] max-h-72 w-[var(--radix-select-trigger-width)] overflow-hidden rounded-xl border border-line bg-white shadow-lg"
+          className="z-[1400] max-h-72 w-[var(--radix-select-trigger-width)] overflow-hidden rounded-xl border border-line bg-white shadow-lg"
         >
           <SelectPrimitive.Viewport className="p-1">
             {options.length === 0 ? (
               <div className="px-3 py-3 text-sm text-muted">No options available</div>
             ) : null}
-            {options.map((option) => (
-              <SelectPrimitive.Item
-                key={option.value}
-                value={option.value}
-                className="relative flex cursor-pointer select-none items-start gap-2 rounded-lg px-3 py-2.5 text-[15px] text-ink outline-none data-[highlighted]:bg-brand-50 data-[state=checked]:font-semibold"
-              >
-                <div className="min-w-0 flex-1">
-                  <SelectPrimitive.ItemText>{option.label}</SelectPrimitive.ItemText>
-                  {option.description ? (
-                    <p className="mt-0.5 text-xs font-normal text-muted">{option.description}</p>
-                  ) : null}
-                </div>
-                <SelectPrimitive.ItemIndicator>
-                  <Check className="mt-0.5 size-4 text-brand-600" />
-                </SelectPrimitive.ItemIndicator>
-              </SelectPrimitive.Item>
+            {options.map((option, index) => (
+              <React.Fragment key={option.value}>
+                {option.group && option.group !== options[index - 1]?.group ? (
+                  <div
+                    role="presentation"
+                    className="px-3 pb-1 pt-2.5 text-[11px] font-bold uppercase tracking-wide text-muted"
+                  >
+                    {option.group}
+                  </div>
+                ) : null}
+                <SelectPrimitive.Item
+                  value={option.value}
+                  className="relative flex cursor-pointer select-none items-start gap-2 rounded-lg px-3 py-2.5 text-[15px] text-ink outline-none data-[highlighted]:bg-brand-50 data-[state=checked]:font-semibold"
+                >
+                  <div className="min-w-0 flex-1">
+                    <SelectPrimitive.ItemText>{option.label}</SelectPrimitive.ItemText>
+                    {option.description ? (
+                      <p className="mt-0.5 text-xs font-normal text-muted">{option.description}</p>
+                    ) : null}
+                  </div>
+                  <SelectPrimitive.ItemIndicator>
+                    <Check className="mt-0.5 size-4 text-brand-600" />
+                  </SelectPrimitive.ItemIndicator>
+                </SelectPrimitive.Item>
+              </React.Fragment>
             ))}
           </SelectPrimitive.Viewport>
         </SelectPrimitive.Content>

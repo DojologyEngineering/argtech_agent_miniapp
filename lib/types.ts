@@ -21,13 +21,23 @@ export const EDUCATION_LEVELS = [
 ] as const;
 export type EducationLevel = (typeof EDUCATION_LEVELS)[number];
 
+export const CERTIFICATE_TYPES = ["GAP", "Organic", "Other"] as const;
+export type CertificateType = (typeof CERTIFICATE_TYPES)[number];
+
+/**
+ * The agent uploads the original photo; staff prepare a buyer-safe copy before
+ * buyers ever see it.
+ */
 export interface Certificate {
   id: ID;
   farmerId: ID;
-  title: string;
-  issuedDate: string; // ISO yyyy-mm-dd
-  expiryDate: string | null;
-  notes: string;
+  type: CertificateType;
+  issuer: string;
+  /** What the certificate covers, e.g. "Tomato production". */
+  scope: string;
+  expiryDate: string | null; // ISO yyyy-mm-dd
+  /** Mock phase: a placeholder image data URI, not the real upload. */
+  photo: string | null;
 }
 
 export interface FarmerDocuments {
@@ -118,7 +128,21 @@ export type CropCycleStatus = "growing" | "ready_to_harvest" | "harvesting" | "c
 
 export const PRODUCTION_METHODS = ["Conventional", "Organic", "GAP", "Mixed"] as const;
 export const DELIVERY_FREQUENCIES = ["One-off", "Weekly", "Bi-weekly", "Monthly"] as const;
-export const FERTILIZER_TYPES = ["Urea", "NPK", "Compost", "Manure", "None"] as const;
+/** Dropdown options, grouped so the broad kinds and the common products sit together. */
+export const FERTILIZER_OPTIONS = [
+  { value: "Chemical", group: "Chemical" },
+  { value: "Urea", group: "Chemical" },
+  { value: "NPK", group: "Chemical" },
+  { value: "Organic", group: "Organic" },
+  { value: "Compost", group: "Organic" },
+  { value: "Manure", group: "Organic" },
+  { value: "Mixed", group: "Other" },
+  { value: "None", group: "Other" },
+] as const;
+export const FERTILIZER_TYPES = FERTILIZER_OPTIONS.map((o) => o.value);
+
+export const PESTICIDE_OPTIONS = ["Not used", "Used", "Not sure"] as const;
+export type PesticideUse = (typeof PESTICIDE_OPTIONS)[number];
 
 export interface CropCosts {
   seed: number;
@@ -131,7 +155,9 @@ export interface ProductionDetails {
   method: string | null;
   deliveryFrequency: string | null;
   fertilizerType: string | null;
-  pesticideUsed: string | null;
+  pesticideUsed: PesticideUse | null;
+  /** Optional detail — which product, how often. */
+  pesticideDetails: string;
   notes: string;
 }
 
@@ -203,8 +229,90 @@ export type CropCycleInput = Omit<CropCycle, "id" | "createdAt" | "activities" |
 
 /* ------------------------------------------------------------------- Order */
 
-export type OrderStatus = "pending" | "delivered" | "completed";
+/**
+ * Same labels as the Buyer App. Orders are raised in the Buyer App or by staff
+ * in the Admin Portal and move through these states there — field agents only
+ * view them, record the handover check, and report problems.
+ */
+export type OrderStatus =
+  | "requested"
+  | "confirmed"
+  | "delivered"
+  | "completed"
+  | "declined"
+  | "cancelled";
 export type DeliveryMethod = "pickup" | "delivery";
+export type OrderSource = "buyer_app" | "staff";
+
+/** "Order now" draws on stock that is available today; a "Request" is for a future date. */
+export type OrderKind = "order_now" | "request";
+
+/** What the buyer asked for, as typed in the Buyer App. */
+export interface RequestedCrop {
+  /** Null for an "Other crop" request: a crop that is not in the catalog. */
+  cropRefId: ID | null;
+  cropName: string;
+  quantityKg: number;
+}
+
+/** Where and when the buyer collects a Pickup order (set by staff). */
+export interface PickupDetails {
+  meetingPoint: string;
+  /** e.g. "08:00 – 10:00" */
+  time: string | null;
+  /** A recognisable spot next to the meeting point. */
+  landmark?: string | null;
+  /** Link that opens the meeting point in a maps app. */
+  mapUrl?: string | null;
+  /** Who collects the produce for the buyer. */
+  collectorName?: string | null;
+  collectorPhone?: string | null;
+}
+
+export const PROBLEM_REASONS = [
+  "Farmer cannot deliver",
+  "Quantity short",
+  "Quality concern",
+  "Other",
+] as const;
+export type ProblemReason = (typeof PROBLEM_REASONS)[number];
+
+export const REJECT_REASONS = [
+  "Too ripe",
+  "Not ripe enough",
+  "Cracks or damage",
+  "Wrong size",
+  "Other",
+] as const;
+export type RejectReason = (typeof REJECT_REASONS)[number];
+
+/** Raised by the agent against one line. Never changes the order status. */
+export interface ProblemReport {
+  reason: ProblemReason;
+  note: string;
+  reportedAt: string;
+}
+
+/** What the buyer asked for beyond the standard crop specification. */
+export interface OrderRequirements {
+  ripeness: string | null;
+  size: string | null;
+}
+
+/** The agent's check of one farmer's produce at handover. Locked once saved. */
+export interface HandoverCheck {
+  receivedKg: number;
+  acceptedKg: number;
+  /** receivedKg − acceptedKg. */
+  rejectedKg: number;
+  rejectReason: RejectReason | null;
+  /** Mock phase: placeholder image data URIs. */
+  photos: string[];
+  note: string;
+  /** Only asked for Pick up orders. */
+  buyerRepPresent: boolean | null;
+  checkedAt: string;
+}
 
 /**
  * One allocation from a single crop cycle. An order can hold several of
@@ -216,16 +324,29 @@ export interface OrderLineItem {
   cropCycleId: ID;
   quantityKg: number;
   pricePerKg: number;
+  problem: ProblemReport | null;
+  handoverCheck: HandoverCheck | null;
 }
 
 export interface Order {
   id: ID;
   code: string; // PO-001
   buyer: string;
+  source: OrderSource;
+  kind: OrderKind;
+  /** The crop and quantity asked for. A confirmed order can hold less (see lineItems). */
+  requested: RequestedCrop;
   orderDate: string;
-  /** When the buyer collects or receives the produce. Shown on the Calendar. */
+  /** Delivery or pickup date for orders; the needed-by date for a request. Shown on the Calendar. */
   deliveryDate: string;
   deliveryMethod: DeliveryMethod;
+  /** Pickup orders only, once confirmed. */
+  pickup: PickupDetails | null;
+  requirements: OrderRequirements;
+  /** Free-text requirements on an "Other crop" request. */
+  requirementsText: string | null;
+  /** Why staff declined the request or cancelled the order. */
+  reason: string | null;
   /** Tracked for the whole order, not per line item. */
   status: OrderStatus;
   notes: string;
@@ -233,9 +354,22 @@ export interface Order {
   createdAt: string;
 }
 
-export type OrderLineItemInput = Omit<OrderLineItem, "id">;
+export type OrderLineItemInput = Pick<OrderLineItem, "cropCycleId" | "quantityKg" | "pricePerKg">;
 
-export type OrderInput = Omit<Order, "id" | "code" | "createdAt" | "lineItems"> & {
+export type OrderInput = Omit<
+  Order,
+  | "id"
+  | "code"
+  | "createdAt"
+  | "lineItems"
+  | "source"
+  | "kind"
+  | "requested"
+  | "pickup"
+  | "requirements"
+  | "requirementsText"
+  | "reason"
+> & {
   lineItems: OrderLineItemInput[];
 };
 
@@ -290,6 +424,7 @@ export interface OrderLineItemSummary extends OrderLineItem {
   cropName: string;
   varietyType: string;
   lineTotal: number;
+  cropRefId: ID;
 }
 
 export interface OrderSummary extends Omit<Order, "lineItems"> {
@@ -299,6 +434,10 @@ export interface OrderSummary extends Omit<Order, "lineItems"> {
   /** Distinct farmers supplying this order — an order may pull from several. */
   farmerNames: string[];
   cropNames: string[];
+  /** At least one line carries a "Problem reported" flag. */
+  hasProblem: boolean;
+  /** Confirmed, delivery date reached, and some line still has no saved handover check. */
+  handoverDue: boolean;
 }
 
 /** A row on the Supply Matching screen: harvested stock still unsold. */

@@ -9,6 +9,7 @@ import {
   isOrderEligible,
   lineItemTotals,
   marginPercent,
+  orderCountsAsSold,
   totalCost,
 } from "../derive";
 import { uid } from "../utils";
@@ -28,7 +29,8 @@ import type {
 /** Every line item, across every order, that draws on this crop cycle. */
 function salesForCycle(cycleId: ID) {
   const items = getState()
-    .orders.flatMap((o) => o.lineItems)
+    .orders.filter((o) => orderCountsAsSold(o.status))
+    .flatMap((o) => o.lineItems)
     .filter((i) => i.cropCycleId === cycleId);
   return lineItemTotals(items);
 }
@@ -305,7 +307,7 @@ export async function listSupplyMatches(options?: {
     .map((cycle) => {
       const harvested = harvestedQuantityKg(cycle.harvestLog);
       const soldElsewhere = db.orders
-        .filter((o) => o.id !== options?.excludeOrderId)
+        .filter((o) => o.id !== options?.excludeOrderId && orderCountsAsSold(o.status))
         .flatMap((o) => o.lineItems)
         .filter((i) => i.cropCycleId === cycle.id)
         .reduce((sum, i) => sum + i.quantityKg, 0);

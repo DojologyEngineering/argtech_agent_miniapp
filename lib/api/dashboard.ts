@@ -1,15 +1,17 @@
 import { format, parseISO, subMonths } from "date-fns";
 import { delay, getState } from "../db";
-import { cropCycleStatus } from "../derive";
+import { cropCycleStatus, isHandoverDue } from "../derive";
 import { toISODate } from "../format";
 import { farmerFullName } from "./farmers";
-import type { ID, OrderStatus } from "../types";
+import type { DeliveryMethod, ID, OrderStatus } from "../types";
 
 export interface DashboardStats {
   totalFarmers: number;
   totalPlots: number;
   activeCrops: number;
   purchaseOrders: number;
+  /** Confirmed orders at or past their delivery date with a line still unchecked. */
+  handoversDue: number;
 }
 
 export interface HarvestPoint {
@@ -36,6 +38,8 @@ export interface RecentOrderRow {
   quantityKg: number;
   buyer: string;
   status: OrderStatus;
+  /** "Delivered" reads "Picked up" on a pickup order. */
+  deliveryMethod: DeliveryMethod;
 }
 
 export interface DashboardData {
@@ -108,13 +112,22 @@ export async function getDashboard(): Promise<DashboardData> {
           ),
         ),
       );
+      // A request not yet matched to farmers has no lines: show what was asked for.
+      const unmatched = order.lineItems.length === 0;
       return {
         id: order.id,
         code: order.code,
-        cropSummary: crops.length > 1 ? `${crops[0]} +${crops.length - 1}` : (crops[0] ?? "—"),
-        quantityKg: order.lineItems.reduce((sum, i) => sum + i.quantityKg, 0),
+        cropSummary: unmatched
+          ? order.requested.cropName
+          : crops.length > 1
+            ? `${crops[0]} +${crops.length - 1}`
+            : (crops[0] ?? "—"),
+        quantityKg: unmatched
+          ? order.requested.quantityKg
+          : order.lineItems.reduce((sum, i) => sum + i.quantityKg, 0),
         buyer: order.buyer,
         status: order.status,
+        deliveryMethod: order.deliveryMethod,
       };
     });
 
@@ -124,6 +137,7 @@ export async function getDashboard(): Promise<DashboardData> {
       totalPlots: db.plots.length,
       activeCrops,
       purchaseOrders: db.orders.length,
+      handoversDue: db.orders.filter((o) => isHandoverDue(o, today)).length,
     },
     harvestSeries: buckets,
     harvestChangePercent,
