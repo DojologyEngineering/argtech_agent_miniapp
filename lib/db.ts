@@ -28,7 +28,7 @@ export interface DbShape {
 // saved under a previous key is simply ignored — it does NOT get migrated —
 // so a device with stale data always falls back to a fresh, correctly-shaped
 // seed instead of the app rendering half-shaped records and breaking.
-const STORAGE_KEY = "argtech.field-agent.v12";
+const STORAGE_KEY = "argtech.field-agent.v13";
 
 function seed(): DbShape {
   return {
