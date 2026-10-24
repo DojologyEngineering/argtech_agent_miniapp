@@ -775,6 +775,44 @@ export const SEED_CROP_CYCLES: CropCycle[] = [
     estimatedPricePerKg: 0.6,
     production: { method: "Conventional", fertilizerType: "Mixed", pesticideUsed: "Not sure", notes: "" },
   }),
+  // Completed, multi-harvest: a full tomato season on Hill Farm Terrace, fully logged.
+  cycle({
+    id: "cycle_27",
+    farmerId: "farmer_5",
+    plotId: "plot_7",
+    cropRefId: "crop_tomato",
+    plantingOffset: -125,
+    harvestOffset: -65,
+    costs: { seed: 20, fertilizer: 28, labor: 60, other: 12 },
+    expectedOutputKg: 300,
+    estimatedPricePerKg: 0.6,
+    harvests: [
+      { offset: -63, quantityKg: 60, note: "First picking, breaker-stage fruit for the market" },
+      { offset: -58, quantityKg: 70, note: "Second picking, fruit setting well on the lower trusses" },
+      { offset: -52, quantityKg: 80, note: "Peak picking, best colour and size of the season" },
+      { offset: -46, quantityKg: 60, note: "Fourth picking, slightly smaller fruit" },
+      { offset: -41, quantityKg: 30, note: "Final picking, vines declining" },
+    ],
+    completedOffset: -38,
+    production: {
+      method: "Conventional",
+      deliveryFrequency: "Weekly",
+      fertilizerType: "Mixed",
+      pesticideUsed: "Used",
+      pesticideDetails: "Mancozeb, three sprays during fruit set",
+      notes:
+        "Staked and pruned every two weeks. Compost mixed into the beds before transplanting, NPK as top dressing. Picked every 5 to 7 days. Plot cleared after the final picking.",
+    },
+    extraActivities: [
+      { type: "irrigation", offset: -123, note: "Drip line installed and first watering after transplanting" },
+      { type: "fertilization", offset: -110, note: "Basal dressing: compost plus NPK worked into the beds" },
+      { type: "irrigation", offset: -100, note: "Weekly drip irrigation started" },
+      { type: "fertilization", offset: -90, note: "First top dressing, NPK 15-15-15" },
+      { type: "irrigation", offset: -78, note: "Extra watering through a dry spell" },
+      { type: "fertilization", offset: -72, note: "Second top dressing, potassium-rich for fruit set" },
+      { type: "irrigation", offset: -60, note: "Watering reduced as the first fruit began to colour" },
+    ],
+  }),
 ];
 
 interface OrderSeed {
@@ -852,6 +890,7 @@ function order(input: OrderSeed): Order {
  *
  * Supply picture (harvested / sold / available):
  *   cycle_1  cucumber  770 / 550 / 220   PO-0008 400 + PO-0003 150
+ *   cycle_27 tomato    300 / 290 /  10   PO-0002 (completed cycle, 33.3% margin)
  *   cycle_2  tomato    640 / 500 / 140   PO-0009
  *   cycle_3  cabbage  2150 / 300 /1850   PO-0007
  *   cycle_4  eggplant  680 /   0 / 680   PO-0005 was cancelled, so nothing is sold
@@ -1017,5 +1056,35 @@ export const SEED_ORDERS: Order[] = [
     status: "cancelled",
     reason: "Farmer could not deliver",
     lines: [{ id: "line_5a", cropCycleId: "cycle_4", quantityKg: 250 }],
+  }),
+  // Completed: the 290 kg sale of Hill Farm Terrace's tomatoes (10 kg stayed unsold). One order
+  // of 200–999 kg, so the whole order is priced at the $0.60 tier.
+  order({
+    id: "ord_po_0002",
+    code: "PO-0002",
+    kind: "order_now",
+    requested: { cropRefId: "crop_tomato", quantityKg: 290 },
+    placedOffset: -44,
+    dateOffset: -40,
+    deliveryMethod: "delivery",
+    status: "completed",
+    notes: "Deliver to the back entrance before 10:00.",
+    lines: [
+      {
+        id: "line_2a",
+        cropCycleId: "cycle_27",
+        quantityKg: 290,
+        handoverCheck: {
+          receivedKg: 290,
+          acceptedKg: 290,
+          rejectedKg: 0,
+          rejectReason: null,
+          photos: [placeholderImage("Handover photo 1")],
+          note: "Fruit firm and evenly coloured. Everything accepted.",
+          buyerRepPresent: null,
+          checkedAt: daysFromToday(-40),
+        },
+      },
+    ],
   }),
 ];
